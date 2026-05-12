@@ -1,0 +1,9 @@
+Django>=4.2,<6.1
+numpy
+scipy
+pandas
+
+# Dependencias para hardware en Raspberry Pi (Opcionales en PC):
+# smbus2
+# adafruit-circuitpython-mlx90640
+# RPi.GPIO

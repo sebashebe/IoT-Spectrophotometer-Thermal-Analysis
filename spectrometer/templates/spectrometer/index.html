@@ -1,0 +1,1261 @@
+<!--
+  Copyright (c) 2026 Sebastian Herrera Betancur
+  Biomicrosystems Research Group | Universidad de los Andes
+  PROPRIETARY CODE - Unauthorized use, copying or distribution is strictly prohibited.
+-->
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Software de {{ t.app_info.title }} - Versión Web">
+    <title>{{ t.app_info.title }}</title>
+    <link rel="stylesheet" href="{% static 'spectrometer/css/style.css' %}?v=1.1">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+</head>
+<body>
+<div class="app-container" id="app">
+<div class="menu-bar">
+    <div class="menu-item" onclick="toggleMenu(this)">
+        {{ t.menu.file }}
+        <div class="menu-dropdown">
+            <div class="menu-dropdown-item" onclick="exportLog()">{{ t.menu.export_log }}</div>
+            <div class="menu-dropdown-item" onclick="exportGraph()">{{ t.menu.export_graph }}</div>
+            <div class="menu-dropdown-item" onclick="exportSessionData()">{{ t.menu.save_data }}</div>
+            <div class="menu-dropdown-item" onclick="clearSessionData()">{{ t.menu.clear_data }}</div>
+        </div>
+    </div>
+    <div class="menu-item" onclick="toggleMenu(this)">
+        {{ t.menu.view }}
+        <div class="menu-dropdown">
+            <div class="menu-dropdown-item" onclick="toggleTheme()">
+                <span id="theme-toggle-text">{{ t.menu.light_mode }}</span>
+            </div>
+            <div class="menu-dropdown-separator"></div>
+            {% for lang_code, lang_label in available_langs %}
+            <div class="menu-dropdown-item" onclick="setLanguage('{{ lang_code }}')">🌐 {{ lang_label }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="menu-item" onclick="toggleMenu(this)">
+        {{ t.menu.tools }}
+        <div class="menu-dropdown">
+            <div class="menu-dropdown-item" onclick="switchTab('tab-spectrum')">{{ t.menu.go_spectrum }}</div>
+            <div class="menu-dropdown-item" onclick="switchTab('tab-conc')">{{ t.menu.go_conc }}</div>
+            <div class="menu-dropdown-item" onclick="switchTab('tab-cal')">{{ t.menu.go_cal }}</div>
+            <div class="menu-dropdown-separator"></div>
+            <div class="menu-dropdown-item" onclick="switchTab('tab-thermal')">{{ t.menu.thermal_cam }}</div>
+            <div class="menu-dropdown-separator"></div>
+            <div class="menu-dropdown-item" onclick="connectI2C()">⚡ {{ t.sidebar.connect }} (I2C)</div>
+            <div class="menu-dropdown-item" onclick="disconnectI2C()">🔌 {{ t.sidebar.disconnect }} (I2C)</div>
+        </div>
+    </div>
+    <div class="menu-item" onclick="toggleMenu(this)">
+        {{ t.menu.help }}
+        <div class="menu-dropdown">
+            <div class="menu-dropdown-item" onclick="showHelp()">{{ t.menu.view_help }}</div>
+            <div class="menu-dropdown-separator"></div>
+            <div class="menu-dropdown-item" onclick="showAbout()">{{ t.menu.about }}</div>
+        </div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="text-xs text-right" style="color:var(--text-muted)">
+        <span id="hw-mode-badge" class="hw-badge hw-badge-sim" title="{{ t.charts.mode }} de hardware">⚡ {{ t.status.sim }}</span>
+        {{ t.app_info.version_info }}
+    </div>
+</div>
+<div class="main-content">
+<div class="left-panel">
+    <div class="logo-container">
+        <img id="logo-img" src="{% static 'spectrometer/img/BiomicrosystemsLogo_WhiteText.png' %}" alt="Biomicrosystems Logo">
+    </div>
+    <div class="status-bar">
+        <span id="status-label" class="status-disconnected">{{ t.sidebar.label }} {{ t.status.disconnected }}</span>
+    </div>
+    <div class="left-scroll-area">
+        <div class="collapsible-group open" id="group-measurement">
+            <div class="group-header" onclick="toggleGroup('group-measurement')">
+                <span class="group-title">{{ t.sidebar.measurement_control }}</span>
+                <div class="group-header-buttons">
+                    <button class="group-toggle">▼</button>
+                    <button class="group-help" onclick="event.stopPropagation(); showContextHelp('measurement')">?</button>
+                </div>
+            </div>
+            <div class="group-content">
+                <button class="btn btn-block btn-success mb-4" id="btn-calibrate" onclick="measureReference()" disabled>{{ t.sidebar.measure_ref }}</button>
+                <div class="form-row">
+                    <span class="form-label">{{ t.sidebar.meas_type }}</span>
+                    <select id="measurement-type" onchange="onMeasurementTypeChange()" disabled>
+                        <option value="continuous">{{ t.sidebar.meas_continuous }}</option>
+                        <option value="single">{{ t.sidebar.meas_single }}</option>
+                        <option value="sequential">{{ t.sidebar.meas_sequential }}</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">{{ t.sidebar.avg_samples }}</span>
+                    <input type="number" id="m-samples" value="1" min="1" max="10000" disabled>
+                </div>
+                <div class="form-row">
+                    <span class="form-label">{{ t.sidebar.final_meas }}</span>
+                    <input type="number" id="p-points" value="5" min="1" max="10000" disabled>
+                </div>
+                <div class="thermal-sync-section" id="thermal-sync-section">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="thermal-sync-cb" onchange="onThermalSyncChange()">
+                        {{ t.sidebar.thermal_sync }}
+                    </label>
+                    <div class="thermal-sync-hint">{{ t.sidebar.thermal_sync_hint }}</div>
+                </div>
+                <div class="thermal-sync-section" id="thermal-autosave-section">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="thermal-autosave-cb" onchange="onThermalAutoSaveChange()">
+                        {{ t.sidebar.thermal_autosave }}
+                    </label>
+                </div>
+                <div class="thermal-sync-section" id="auto-export-section">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="auto-export-csv-cb" onchange="onAutoExportCSVChange()" checked>
+                        {{ t.sidebar.auto_export_csv }}
+                    </label>
+                </div>
+                <div class="form-row mt-4">
+                    <span class="form-label">{{ t.sidebar.led_control }}</span>
+                    <button class="btn btn-sm" id="btn-toggle-led" onclick="toggleLED()">{{ t.sidebar.led_on }}</button>
+                </div>
+                <div class="btn-group mt-4" style="flex-wrap:wrap; gap:6px;">
+                    <button class="btn btn-primary" id="btn-start-measurement" onclick="startMeasurement()" disabled>▶ {{ t.charts.start_meas }}</button>
+                    <button class="btn btn-danger" id="btn-stop-measurement" onclick="stopMeasurement()" disabled>{{ t.sidebar.stop_meas }}</button>
+                </div>
+            </div>
+        </div>
+        <div class="collapsible-group" id="group-concentration">
+            <div class="group-header" onclick="toggleGroup('group-concentration')">
+                <span class="group-title">{{ t.sidebar.conc_calc }}</span>
+                <div class="group-header-buttons">
+                    <button class="group-toggle">▶</button>
+                    <button class="group-help" onclick="event.stopPropagation(); showContextHelp('beer_lambert')">?</button>
+                </div>
+            </div>
+            <div class="group-content">
+                <div class="form-row">
+                    <span class="form-label">{{ t.sidebar.molar_abs }}</span>
+                    <input type="number" id="epsilon-input" step="any" min="0">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">{{ t.sidebar.optical_path }}</span>
+                    <input type="number" id="path-length-input" value="0.6" step="0.01" min="0.01">
+                </div>
+                <div class="form-row">
+                    <span class="form-label">{{ t.charts.wavelength }}:</span>
+                    <select id="beer-wavelength">
+                        {% for wl, label in wl_options %}
+                        <option value="{{ wl }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="checkbox-group mt-4">
+                    <label class="checkbox-item"><input type="checkbox" id="use-session-curve"> {{ t.sidebar.use_session_curve }}</label>
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-item"><input type="checkbox" id="use-transfer-model"> {{ t.sidebar.use_transfer_model }}</label>
+                </div>
+                <button class="btn btn-block btn-primary mt-4" onclick="calculateConcentration()" id="btn-calc-conc" disabled>{{ t.sidebar.calc_and_reg_conc }}</button>
+                <div class="conc-display mt-4">
+                    <div id="conc-abs-custom" class="text-xs">{{ t.charts.a_custom }} (@λ): N/A</div>
+                    <div id="conc-abs-adjusted" class="text-xs">{{ t.charts.a_adjusted }} (@λ): N/A</div>
+                    <div id="conc-value" class="conc-value mt-4">{{ t.sidebar.conc_val }} N/A</div>
+                </div>
+            </div>
+        </div>
+        <div class="collapsible-group" id="group-ref-cal">
+            <div class="group-header" onclick="toggleGroup('group-ref-cal')">
+                <span class="group-title">{{ t.sidebar.ref_cal_config }}</span>
+                <div class="group-header-buttons">
+                    <button class="group-toggle">▶</button>
+                    <button class="group-help" onclick="event.stopPropagation(); showContextHelp('ref_cal_config_group')">?</button>
+                </div>
+            </div>
+            <div class="group-content">
+                <div class="form-row">
+                    <span class="form-label">{{ t.charts.wavelength }}:</span>
+                    <select id="ref-cal-wl">
+                        {% for wl, label in wl_options %}
+                        <option value="{{ wl }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row full mt-4">
+                    <span class="form-label">{{ t.sidebar.cal_type }}:</span>
+                </div>
+                <div class="radio-group">
+                    <label class="radio-item"><input type="radio" name="ref-cal-type" value="curve" checked onchange="toggleRefCalInputs()"> {{ t.charts.curve }}: A_ref = mC + b</label>
+                    <label class="radio-item"><input type="radio" name="ref-cal-type" value="factor" onchange="toggleRefCalInputs()"> Factor: A_ref = (εL)C</label>
+                </div>
+                <div id="ref-cal-curve-inputs">
+                    <div class="form-row mt-4">
+                        <span class="form-label">{{ t.sidebar.slope }}</span>
+                        <input type="number" id="ref-cal-m" step="any">
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.sidebar.intercept }}</span>
+                        <input type="number" id="ref-cal-b" step="any">
+                    </div>
+                </div>
+                <div id="ref-cal-factor-inputs" class="hidden">
+                    <div class="form-row mt-4">
+                        <span class="form-label">{{ t.sidebar.factor }}</span>
+                        <input type="number" id="ref-cal-epsilon-l" step="any" min="0">
+                    </div>
+                </div>
+                <button class="btn btn-block btn-sm mt-4" onclick="saveRefCalParams()">{{ t.sidebar.save_ref_params }}</button>
+                <div class="text-xs mt-4" id="ref-cal-display" style="color:var(--text-muted)">{{ t.sidebar.ref_params_saved }} {{ t.sidebar.none }}</div>
+            </div>
+        </div>
+        <div class="collapsible-group" id="group-blank">
+            <div class="group-header" onclick="toggleGroup('group-blank')">
+                <span class="group-title">{{ t.sidebar.blank_subtraction }}</span>
+                <div class="group-header-buttons">
+                    <button class="group-toggle">▶</button>
+                    <button class="group-help" onclick="event.stopPropagation(); showContextHelp('blank_subtraction')">?</button>
+                </div>
+            </div>
+            <div class="group-content">
+                <label class="checkbox-item">
+                    <input type="checkbox" id="blank-subtraction-cb" onchange="toggleBlankSubtraction()" disabled>
+                    {{ t.sidebar.activate_blank }}
+                </label>
+                <div class="text-xs mt-4" id="blank-status" style="color:var(--text-muted)">{{ t.sidebar.ref_not_measured }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="log-area-sidebar" id="log-area">
+        <div class="log-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <h4>📝 {{ t.charts.comms_log }}</h4>
+                <button class="group-help" onclick="event.stopPropagation(); showContextHelp('comms_log')" title="{{ t.menu.help }}" style="margin-left: 4px;">?</button>
+            </div>
+            <div class="log-header-btns">
+                <button class="btn btn-sm" onclick="event.stopPropagation(); exportLog()" title="Exportar Log" style="margin-right: 4px;">💾</button>
+                <button class="btn btn-sm" onclick="event.stopPropagation(); toggleMaximizeLog()" id="btn-maximize-log" title="Maximizar Log" style="margin-right: 8px;">⛶</button>
+            </div>
+        </div>
+        <div class="log-output" id="log-output"></div>
+    </div>
+</div>
+<div class="right-panel">
+    <div class="tabs-header">
+        <div class="tab-button active" data-tab="tab-spectrum" onclick="switchTab('tab-spectrum')">{{ t.tabs.spectrum }}</div>
+        <div class="tab-button" data-tab="tab-conc" onclick="switchTab('tab-conc')">{{ t.tabs.conc }}</div>
+        <div class="tab-button" data-tab="tab-cal" onclick="switchTab('tab-cal')">{{ t.tabs.cal }}</div>
+        <div class="tab-button" data-tab="tab-thermal" onclick="switchTab('tab-thermal')">{{ t.tabs.thermal }}</div>
+        <div class="tab-button" data-tab="tab-analysis" onclick="switchTab('tab-analysis')">{{ t.tabs.analysis }}</div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+    <div class="tab-content active" id="tab-spectrum">
+        <div class="tab-chart-area">
+            <div class="chart-container">
+                <canvas id="chart-spectrum"></canvas>
+            </div>
+        </div>
+        <div class="tab-controls-area">
+            <div class="collapsible-group open" id="g-pt">
+                <div class="group-header" onclick="toggleGroup('g-pt')">
+                    <span class="group-title">{{ t.charts.plot_type }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('plot_type')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="radio-group">
+                        <label class="radio-item"><input type="radio" name="plot-type" value="INTENSITY" checked onchange="setPlotType(this.value)"> {{ t.charts.intensity }}</label>
+                        <label class="radio-item"><input type="radio" name="plot-type" value="ABSORBANCE" onchange="setPlotType(this.value)"> {{ t.charts.absorbance }}</label>
+                        <label class="radio-item"><input type="radio" name="plot-type" value="TRANSMITTANCE" onchange="setPlotType(this.value)"> {{ t.charts.transmittance }}</label>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group" id="g-pcust">
+                <div class="group-header" onclick="toggleGroup('g-pcust')">
+                    <span class="group-title">{{ t.charts.plot_customization }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▶</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('plot_customization')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="text-xs mb-4" style="color:var(--text-muted)">{{ t.charts.superimpose_msg }}</div>
+                    <div class="superimpose-list" id="superimpose-list">
+                        <div class="text-xs" style="color:var(--text-muted)">{{ t.charts.no_saved_meas }}</div>
+                    </div>
+                    <div class="checkbox-group mt-8">
+                        <label class="checkbox-item"><input type="checkbox" id="log-scale-cb" onchange="updatePlotOptions()"> Esc. {{ t.charts.logarithmic }} (Y)</label>
+                        <label class="checkbox-item"><input type="checkbox" id="show-markers-cb" checked onchange="updatePlotOptions()"> {{ t.charts.markers }}</label>
+                        <label class="checkbox-item"><input type="checkbox" id="show-i0-cb" onchange="updatePlotOptions()"> {{ t.charts.show_i0 }}</label>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group" id="g-chart-tools-spectrum">
+                <div class="group-header" onclick="toggleGroup('g-chart-tools-spectrum')">
+                    <span class="group-title">{{ t.charts.tools }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▶</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('chart_tools')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="chart-tools-bar">
+                        <button class="chart-tool-btn" id="btn-zoom-spectrum" onclick="toggleZoomMode('chart-spectrum', this)" title="{{ t.charts.zoom_hint }}">{{ t.charts.zoom }}</button>
+                        <button class="chart-tool-btn" id="btn-lambdamax-ann" onclick="toggleLambdaMaxAnnotation(this)" title="{{ t.charts.lambdamax_hint }}">{{ t.charts.lambdamax }}</button>
+                        <button class="chart-tool-btn" id="btn-errorbars-spectrum" onclick="toggleErrorBarsSpectrum(this)" title="{{ t.charts.errorbars_hint }}">{{ t.charts.error_bars }}</button>
+                        <button class="chart-tool-btn" onclick="resetZoom('chart-spectrum')" title="{{ t.charts.reset_zoom_hint }}">{{ t.charts.reset_zoom }}</button>
+                    </div>
+                    <div class="stats-section-title">{{ t.charts.manual_axis_range_label }}</div>
+                    <div class="form-row" style="gap:4px; align-items:center; font-size:11px;">
+                        <span class="form-label">{{ t.charts.axis_y }}</span>
+                        <div style="display:flex; gap:3px; align-items:center;">
+                            <span style="color:var(--text-muted); font-size:10px;">Min</span>
+                            <input type="number" id="spec-ymin" placeholder="auto" style="width:56px; padding:3px 5px; font-size:10px;" onchange="applyAxisRange('chartSpectrum')">
+                            <span style="color:var(--text-muted); font-size:10px;">Max</span>
+                            <input type="number" id="spec-ymax" placeholder="auto" style="width:56px; padding:3px 5px; font-size:10px;" onchange="applyAxisRange('chartSpectrum')">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-live-stats">
+                <div class="group-header" onclick="toggleGroup('g-live-stats')">
+                    <span class="group-title">{{ t.charts.live_stats }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('spectrum_live_stats')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="lambda-max-display" id="lambdamax-display">
+                        <span class="lm-icon">λ</span>
+                        <span id="lambdamax-val">--</span> nm
+                        <span class="lm-sub" id="lambdamax-type">{{ t.charts.lambda_max_type }}</span>
+                    </div>
+                    <div class="stat-dashboard cols-3" id="spectrum-stat-cards">
+                        <div class="stat-card info">
+                            <div class="stat-value info" id="sstat-mean">--</div>
+                            <div class="stat-label">{{ t.charts.mean }}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value accent" id="sstat-std">--</div>
+                            <div class="stat-label">σ</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="sstat-cv">--%</div>
+                            <div class="stat-label">%CV</div>
+                        </div>
+                    </div>
+                    <div class="stat-dashboard cols-3 mt-4" id="spectrum-adv-stat-cards">
+                        <div class="stat-card">
+                            <div class="stat-value" id="sstat-skewness">--</div>
+                            <div class="stat-label">Skewness</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="sstat-kurtosis">--</div>
+                            <div class="stat-label">Kurtosis</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="sstat-normality">--</div>
+                            <div class="stat-label">Normality (SW)</div>
+                        </div>
+                    </div>
+                    <div class="stats-section-title">{{ t.charts.snr_band }}</div>
+                    <div id="snr-bars-container">
+                        {% for wl, label in wl_options %}
+                        <div class="snr-bar-row">
+                            <span class="snr-bar-label">{{ wl }}nm</span>
+                            <div class="snr-bar-track"><div class="snr-bar-fill" id="snr-fill-{{ wl }}" style="width:0%"></div></div>
+                            <span class="snr-bar-val" id="snr-val-{{ wl }}">--</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-thermal-stats">
+                <div class="group-header" onclick="toggleGroup('g-thermal-stats')">
+                    <span class="group-title">{{ t.charts.thermal_title }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('thermal_stats')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="thermal-stats">
+                        <div class="thermal-stat-card">
+                            <div class="thermal-stat-value" id="thermal-min-main">--</div>
+                            <div class="thermal-stat-label">{{ t.charts.min_c }}</div>
+                        </div>
+                        <div class="thermal-stat-card">
+                            <div class="thermal-stat-value" id="thermal-max-main">--</div>
+                            <div class="thermal-stat-label">{{ t.charts.max_c }}</div>
+                        </div>
+                        <div class="thermal-stat-card">
+                            <div class="thermal-stat-value" id="thermal-mean-main">--</div>
+                            <div class="thermal-stat-label">{{ t.charts.mean_c }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-content" id="tab-conc">
+        <div class="tab-chart-area">
+            <div class="chart-container">
+                <canvas id="chart-conc-curve"></canvas>
+            </div>
+        </div>
+        <div class="tab-controls-area">
+            <div class="collapsible-group open" id="g-conc-controls">
+                <div class="group-header" onclick="toggleGroup('g-conc-controls')">
+                    <span class="group-title">{{ t.charts.conc_controls }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('conc_controls')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.y_type }}</span>
+                        <select id="conc-y-type" onchange="loadConcCurveData()">
+                            <option>{{ t.charts.intensity }}</option>
+                            <option>{{ t.charts.absorbance }}</option>
+                            <option>{{ t.csv.transmittance }}</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.wavelength }}:</span>
+                        <select id="conc-wl" onchange="loadConcCurveData()">
+                            {% for wl, label in wl_options %}<option value="{{ wl }}">{{ label }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.val_x }}</span>
+                        <input type="number" id="conc-x-value" step="any" value="0">
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.val_y }}</span>
+                        <input type="number" id="conc-y-value" step="any" value="0" disabled>
+                    </div>
+                    <button class="btn btn-block btn-sm mt-4" onclick="measureConcCurveY()">{{ t.charts.measure_y }}</button>
+                    <button class="btn btn-block btn-primary btn-sm mt-4" onclick="addConcCurvePoint()">➕ {{ t.charts.add_point }}</button>
+                </div>
+            </div>
+            <div class="collapsible-group" id="g-chart-tools-conc">
+                <div class="group-header" onclick="toggleGroup('g-chart-tools-conc')">
+                    <span class="group-title">{{ t.charts.tools }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▶</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('chart_tools_conc')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="chart-tools-bar">
+                        <button class="chart-tool-btn" id="btn-zoom-conc" onclick="toggleZoomMode('chart-conc-curve', this)">{{ t.charts.zoom }}</button>
+                        <button class="chart-tool-btn" id="btn-ci-conc" onclick="toggleConfidenceBands('conc', this)">{{ t.charts.conf_bands }}</button>
+                        <button class="chart-tool-btn" id="btn-pi-conc" onclick="togglePredictionBands('conc', this)">{{ t.charts.pred_bands }}</button>
+                        <button class="chart-tool-btn" id="btn-eb-conc" onclick="toggleErrorBarsConc(this)">{{ t.charts.error_pt }}</button>
+                        <button class="chart-tool-btn" onclick="resetZoom('chart-conc-curve')">{{ t.charts.reset_zoom }}</button>
+                    </div>
+                    <div class="bands-toggle-group">
+                        <div class="bands-toggle-item"><div class="band-swatch band-ci"></div><span>{{ t.charts.ci_band_desc }}</span></div>
+                        <div class="bands-toggle-item"><div class="band-swatch band-pi"></div><span>{{ t.charts.pi_band_desc }}</span></div>
+                        <div class="bands-toggle-item"><div class="band-swatch band-eb"></div><span>{{ t.charts.eb_band_desc }}</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-regression-stats-conc">
+                <div class="group-header" onclick="toggleGroup('g-regression-stats-conc')">
+                    <span class="group-title">📈 {{ t.charts.reg_stats }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('regression_stats')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="form-row mb-2">
+                        <span class="form-label">{{ t.charts.model }}</span>
+                        <select id="conc-reg-type" onchange="loadConcCurveData()">
+                            <option value="linear">{{ t.charts.linear }} (y = mx + b)</option>
+                            <option value="quadratic">{{ t.charts.polynomial_2 }} (y = ax² + bx + c)</option>
+                            <option value="exponential">{{ t.charts.exponential }} (y = A·e^Bx)</option>
+                            <option value="logarithmic">{{ t.charts.logarithmic }} (y = A·ln(x) + B)</option>
+                        </select>
+                    </div>
+                    <table class="regression-table" id="conc-regression-table">
+                        <tr><td>{{ t.charts.equation }}</td><td id="creg-eq">N/A</td></tr>
+                        <tr class="highlight"><td>R²</td><td id="creg-r2">N/A</td></tr>
+                        <tr><td>R² adj.</td><td id="creg-r2adj">N/A</td></tr>
+                        <tr><td>RMSE</td><td id="creg-rmse">N/A</td></tr>
+                        <tr><td>SEE</td><td id="creg-see">N/A</td></tr>
+                        <tr><td>{{ t.charts.ci95_slope }}</td><td id="creg-ci-slope">N/A</td></tr>
+                        <tr><td>{{ t.charts.creg_n }}</td><td id="creg-n">0</td></tr>
+                    </table>
+                    <div class="stats-section-title">{{ t.charts.lod_loq }}</div>
+                    <div class="lod-loq-panel">
+                        <div class="lod-loq-card">
+                            <div class="lod-label">LOD</div>
+                            <div class="lod-value" id="creg-lod">--</div>
+                            <div class="lod-unit">{{ t.charts.lod_unit }}</div>
+                        </div>
+                        <div class="lod-loq-card">
+                            <div class="lod-label">LOQ</div>
+                            <div class="lod-value" id="creg-loq">--</div>
+                            <div class="lod-unit">{{ t.charts.lod_unit }}</div>
+                        </div>
+                    </div>
+                    <div class="stats-section-title">{{ t.charts.residuals }}</div>
+                    <div class="residuals-container"><canvas id="chart-conc-residuals"></canvas></div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-conc-points">
+                <div class="group-header" onclick="toggleGroup('g-conc-points')">
+                    <span class="group-title">{{ t.charts.curve_points }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('conc_points')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="table-container">
+                        <table class="data-table" id="conc-table">
+                            <thead><tr><th>{{ t.charts.value }} X</th><th>{{ t.charts.value }} Y</th><th>{{ t.charts.y_type_label }}</th><th>λ (nm)</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="btn-group mt-4">
+                        <button class="btn btn-sm" onclick="removeConcCurvePoint()">{{ t.charts.delete_selected }}</button>
+                        <button class="btn btn-sm" onclick="clearConcCurveView()">{{ t.charts.clear_view }}</button>
+                        <button class="btn btn-sm btn-danger" onclick="clearConcCurveAll()">{{ t.charts.clear_all }}</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-content" id="tab-cal">
+        <div class="tab-chart-area">
+            <div class="chart-container">
+                <canvas id="chart-cal-curve"></canvas>
+            </div>
+        </div>
+        <div class="tab-controls-area">
+            <div class="collapsible-group open" id="g-cal-view">
+                <div class="group-header" onclick="toggleGroup('g-cal-view')">
+                    <span class="group-title">{{ t.charts.select_view }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('cal_view')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="radio-group">
+                        <label class="radio-item"><input type="radio" name="cal-view" value="abs_vs_conc" checked onchange="loadCalCurveData()"> {{ t.charts.cal_abs_vs_conc }}</label>
+                        <label class="radio-item"><input type="radio" name="cal-view" value="transfer" onchange="loadCalCurveData()"> {{ t.charts.cal_transfer }}</label>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-cal-add">
+                <div class="group-header" onclick="toggleGroup('g-cal-add')">
+                    <span class="group-title">{{ t.help.cal_add_points.title }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('cal_add_points')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.wavelength }}:</span>
+                        <select id="cal-wl" onchange="loadCalCurveData()">
+                            {% for wl, label in wl_options %}<option value="{{ wl }}">{{ label }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.standard_conc }}</span>
+                        <input type="number" id="cal-conc" step="any" value="0" min="0">
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.measured_abs }}</span>
+                        <input type="number" id="cal-abs-custom" step="any" value="0" disabled>
+                    </div>
+                    <button class="btn btn-block btn-sm mt-4" onclick="measureCalAbsCustom()">🔬 {{ t.charts.measure_abs_std }}</button>
+                    <div class="form-row mt-4">
+                        <span class="form-label">{{ t.charts.ref_abs }}</span>
+                        <input type="number" id="cal-abs-ref" step="any" placeholder="{{ t.charts.optional }}">
+                    </div>
+                    <button class="btn btn-block btn-primary btn-sm mt-4" onclick="addCalPoint()">➕ {{ t.charts.add_point }}</button>
+                </div>
+            </div>
+            <div class="collapsible-group" id="g-chart-tools-cal">
+                <div class="group-header" onclick="toggleGroup('g-chart-tools-cal')">
+                    <span class="group-title">{{ t.charts.tools }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▶</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('chart_tools_cal')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="chart-tools-bar">
+                        <button class="chart-tool-btn" id="btn-zoom-cal" onclick="toggleZoomMode('chart-cal-curve', this)">{{ t.charts.zoom }}</button>
+                        <button class="chart-tool-btn" id="btn-ci-cal" onclick="toggleConfidenceBands('cal', this)">{{ t.charts.conf_bands }}</button>
+                        <button class="chart-tool-btn" id="btn-pi-cal" onclick="togglePredictionBands('cal', this)">{{ t.charts.pred_bands }}</button>
+                        <button class="chart-tool-btn" onclick="resetZoom('chart-cal-curve')">{{ t.charts.reset_zoom }}</button>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-cal-results">
+                <div class="group-header" onclick="toggleGroup('g-cal-results')">
+                    <span class="group-title">{{ t.charts.results_actions }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('cal_results')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <button class="btn btn-block btn-success btn-sm mb-8" onclick="applyCalCurve()">{{ t.charts.apply_to_main }}</button>
+                    <div class="text-xs mb-4"><b>{{ t.charts.session_cal }}</b></div>
+                    <div class="text-xs" id="cal-eq-label" style="color:var(--text-muted)">{{ t.charts.equation }}: N/A</div>
+                    <div class="text-xs" id="cal-r2-label" style="color:var(--text-muted)">R²: N/A</div>
+                    <div class="text-xs mt-4 mb-4"><b>{{ t.charts.transfer_model }}</b></div>
+                    <div class="text-xs" id="transfer-eq-label" style="color:var(--text-muted)">{{ t.charts.equation }}: N/A</div>
+                    <div class="text-xs" id="transfer-r2-label" style="color:var(--text-muted)">R²: N/A</div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-analytical-validation">
+                <div class="group-header" onclick="toggleGroup('g-analytical-validation')">
+                    <span class="group-title">{{ t.charts.analytical_validation }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('analytical_validation')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="form-row mb-2">
+                        <span class="form-label">{{ t.charts.model }}</span>
+                        <select id="cal-reg-type" onchange="loadCalCurveData()">
+                            <option value="linear">{{ t.charts.linear }} (y = mx + b)</option>
+                            <option value="quadratic">{{ t.charts.polynomial_2_label }}</option>
+                            <option value="exponential">{{ t.charts.exponential }} (y = A·e^Bx)</option>
+                            <option value="logarithmic">{{ t.charts.logarithmic }} (y = A·ln(x) + B)</option>
+                        </select>
+                    </div>
+                    <table class="regression-table" id="cal-validation-table">
+                        <tr class="highlight"><td>R²</td><td id="cval-r2">N/A</td></tr>
+                        <tr><td>{{ t.charts.r2_adjusted }}</td><td id="cval-r2adj">N/A</td></tr>
+                        <tr><td>RMSE</td><td id="cval-rmse">N/A</td></tr>
+                        <tr><td>SEE</td><td id="cval-see">N/A</td></tr>
+                        <tr><td>{{ t.charts.sensitivity }}</td><td id="cval-slope">N/A</td></tr>
+                        <tr><td>{{ t.charts.ci95_slope }}</td><td id="cval-ci">N/A</td></tr>
+                        <tr><td>{{ t.charts.creg_n }}</td><td id="cval-n">0</td></tr>
+                    </table>
+                    <div class="stats-section-title">{{ t.charts.lod_loq }} (método 3σ/10σ)</div>
+                    <div class="lod-loq-panel">
+                        <div class="lod-loq-card">
+                            <div class="lod-label">LOD</div>
+                            <div class="lod-value" id="cval-lod">--</div>
+                            <div class="lod-unit">{{ t.units.in_x }} (conc.)</div>
+                        </div>
+                        <div class="lod-loq-card">
+                            <div class="lod-label">LOQ</div>
+                            <div class="lod-value" id="cval-loq">--</div>
+                            <div class="lod-unit">{{ t.units.in_x }} (conc.)</div>
+                        </div>
+                    </div>
+                    <div class="stats-section-title">{{ t.charts.recovery_factor }}</div>
+                    <div id="recovery-factors-container" style="font-size:11px; color:var(--text-muted);">{{ t.charts.no_cal_pts }}</div>
+                </div>
+            </div>
+            <div class="collapsible-group" id="g-qc-cal">
+                <div class="group-header" onclick="toggleGroup('g-qc-cal')">
+                    <span class="group-title">{{ t.charts.quality_control }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▶</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('quality_control')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="form-row" style="align-items:center;">
+                        <span class="form-label">{{ t.charts.cv_alert }} &gt;:</span>
+                        <input type="number" id="qc-cv-threshold" value="5" min="0.1" max="50" step="0.1" style="width:80px;">
+                    </div>
+                    <div class="form-row" style="align-items:center;">
+                        <span class="form-label">{{ t.charts.r2_alert }} &lt;:</span>
+                        <input type="number" id="qc-r2-threshold" value="0.999" min="0.8" max="1" step="0.001" style="width:80px;">
+                    </div>
+                    <div class="qc-panel" id="qc-rules-panel">
+                        <div class="qc-rule"><div class="qc-light idle" id="qc-light-r2"></div><span class="qc-rule-name">{{ t.charts.r2_minimum }}</span><span class="qc-rule-value" id="qc-val-r2">--</span></div>
+                        <div class="qc-rule"><div class="qc-light idle" id="qc-light-cv"></div><span class="qc-rule-name">{{ t.charts.cv_residuals }}</span><span class="qc-rule-value" id="qc-val-cv">--%</span></div>
+                        <div class="qc-rule"><div class="qc-light idle" id="qc-light-n"></div><span class="qc-rule-name">{{ t.charts.n_min_points }}</span><span class="qc-rule-value" id="qc-val-n">--</span></div>
+                        <div class="qc-rule"><div class="qc-light idle" id="qc-light-lod"></div><span class="qc-rule-name">{{ t.charts.lod_defined }}</span><span class="qc-rule-value" id="qc-val-lod">--</span></div>
+                    </div>
+                    <button class="btn btn-block btn-sm mt-4" onclick="runQCCheck()">{{ t.charts.qc_eval }}</button>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-cal-points">
+                <div class="group-header" onclick="toggleGroup('g-cal-points')">
+                    <span class="group-title">{{ t.charts.cal_points }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('cal_points')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="table-container">
+                        <table class="data-table" id="cal-table">
+                            <thead><tr><th>{{ t.csv.concentration }}</th><th>A_custom</th><th>A_ref</th><th>λ (nm)</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="btn-group mt-4">
+                        <button class="btn btn-sm" onclick="removeCalPoint()">{{ t.charts.delete_selected }}</button>
+                        <button class="btn btn-sm" onclick="clearCalWl()">{{ t.charts.clear_wl }}</button>
+                        <button class="btn btn-sm btn-danger" onclick="clearCalAll()">{{ t.charts.clear_all }}</button>
+                    </div>
+                    <div class="btn-group mt-4">
+                        <button class="btn btn-sm" onclick="downloadCalData()">{{ t.charts.save_data }}</button>
+                        <button class="btn btn-sm" onclick="document.getElementById('cal-file-upload').click()">{{ t.charts.load_data }}</button>
+                        <input type="file" id="cal-file-upload" accept=".csv" style="display:none" onchange="loadCalFile(this)">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-content" id="tab-thermal">
+        <div class="tab-chart-area">
+            <div class="chart-container" style="display:flex; align-items:center; justify-content:center; position:relative;">
+                <div class="thermal-heatmap-wrapper">
+                    <canvas id="thermal-canvas" width="640" height="480" style="width:100%; height:auto; border-radius:4px;"></canvas>
+                    <div class="thermal-colorbar" id="thermal-colorbar">
+                        <div class="thermal-colorbar-body">
+                            <canvas id="thermal-colorbar-gradient" class="thermal-colorbar-gradient" width="20" height="200"></canvas>
+                            <div class="thermal-colorbar-labels" id="thermal-colorbar-labels">
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                                <span class="thermal-colorbar-label">--</span>
+                            </div>
+                        </div>
+                        <div class="thermal-colorbar-unit">{{ t.units.temp_c }}</div>
+                    </div>
+                </div>
+                <div class="thermal-tooltip" id="thermal-tooltip">
+                    <div class="thermal-tooltip-temp" id="tt-temp">--{{ t.units.temp_c }}</div>
+                    <div class="thermal-tooltip-pos" id="tt-pos">{{ t.units.row }}: -- {{ t.units.col }}: --</div>
+                    <div class="thermal-tooltip-delta" id="tt-delta">{{ t.units.delta_t }}: -- {{ t.units.temp_c }}</div>
+                    <div class="thermal-tooltip-class within" id="tt-class">{{ t.charts.within_1sigma }}</div>
+                </div>
+                <div class="zoom-hint" id="thermal-crosshair-hint">🖱️ {{ t.charts.hover_hint }}</div>
+            </div>
+        </div>
+        <div class="tab-controls-area">
+            <div class="collapsible-group open" id="g-thermal-control">
+                <div class="group-header" onclick="toggleGroup('g-thermal-control')">
+                    <span class="group-title">{{ t.charts.thermal_controls }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('thermal_control')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-success" id="btn-thermal-start" onclick="startThermal()">{{ t.charts.thermal_on }}</button>
+                        <button class="btn btn-sm btn-danger" id="btn-thermal-stop" onclick="stopThermal()" disabled>{{ t.sidebar.stop_meas }}</button>
+                        <button class="btn btn-sm" id="btn-thermal-capture" onclick="captureThermal()" disabled title="Capturar Reporte y Matriz Raw Térmica">📸 Capturar</button>
+                    </div>
+                    <div class="form-row mt-8">
+                        <span class="form-label">{{ t.charts.colormap }}:</span>
+                        <select id="thermal-cmap" onchange="thermalCmapChanged()">
+                            <option value="inferno">Inferno</option>
+                            <option value="hot" selected>Hot</option>
+                            <option value="plasma">Plasma</option>
+                            <option value="viridis">Viridis</option>
+                            <option value="coolwarm">Coolwarm</option>
+                        </select>
+                    </div>
+                    <div class="form-row mt-4">
+                        <span class="form-label">{{ t.charts.display_scale }}:</span>
+                        <select id="thermal-display-scale" onchange="thermalScaleChanged()">
+                            <option value="1">1x (32×24 px) — nativo</option>
+                            <option value="4">4x (128×96 px)</option>
+                            <option value="8" selected>8x (256×192 px)</option>
+                            <option value="16">16x (512×384 px)</option>
+                            <option value="32">32x (1024×768 px) — máximo</option>
+                        </select>
+                    </div>
+                    <label class="checkbox-item mt-4"><input type="checkbox" id="thermal-autoscale" checked> {{ t.charts.auto_scale }}</label>
+                    <div class="thermal-crosshair-display" id="thermal-crosshair-display">
+                        <span class="cross-icon">⊕</span>
+                        <span class="thermal-crosshair-temp" id="thermal-xhair-temp">--{{ t.units.temp_c }}</span>
+                        <span class="thermal-crosshair-pos" id="thermal-xhair-pos">x:- y:-</span>
+                    </div>
+                    <div class="thermal-stats mt-8">
+                        <div class="thermal-stat-card">
+                            <div class="thermal-stat-value" id="thermal-min">--</div>
+                            <div class="thermal-stat-label">{{ t.charts.min_c }}</div>
+                        </div>
+                        <div class="thermal-stat-card">
+                            <div class="thermal-stat-value" id="thermal-max">--</div>
+                            <div class="thermal-stat-label">{{ t.charts.max_c }}</div>
+                        </div>
+                        <div class="thermal-stat-card">
+                            <div class="thermal-stat-value" id="thermal-mean">--</div>
+                            <div class="thermal-stat-label">{{ t.charts.mean_c }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-thermal-advanced">
+                <div class="group-header" onclick="toggleGroup('g-thermal-advanced')">
+                    <span class="group-title">📊 {{ t.charts.advanced_stats }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('thermal_advanced')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="thermal-advanced-stats">
+                        <div class="thermal-advanced-card">
+                            <div class="thermal-advanced-value" id="thermal-median">--</div>
+                            <div class="thermal-advanced-label">{{ t.charts.thermal_median }}</div>
+                        </div>
+                        <div class="thermal-advanced-card">
+                            <div class="thermal-advanced-value" id="thermal-p10">--</div>
+                            <div class="thermal-advanced-label">{{ t.charts.thermal_p10 }} {{ t.units.temp_c }}</div>
+                        </div>
+                        <div class="thermal-advanced-card">
+                            <div class="thermal-advanced-value" id="thermal-p90">--</div>
+                            <div class="thermal-advanced-label">{{ t.charts.thermal_p90 }} {{ t.units.temp_c }}</div>
+                        </div>
+                        <div class="thermal-advanced-card">
+                            <div class="thermal-advanced-value" id="thermal-std">--</div>
+                            <div class="thermal-advanced-label">σ {{ t.charts.field }}</div>
+                        </div>
+                        <div class="thermal-advanced-card">
+                            <div class="thermal-advanced-value" id="thermal-range">--</div>
+                            <div class="thermal-advanced-label">{{ t.charts.range }}</div>
+                        </div>
+                        <div class="thermal-advanced-card">
+                            <div class="thermal-advanced-value" id="thermal-pixels">768</div>
+                            <div class="thermal-advanced-label">{{ t.charts.pixels }}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; margin-top:16px;">
+                        <span class="stats-section-title" style="margin-bottom:0;">{{ t.charts.temp_dist_frame }}</span>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-sm" onclick="toggleMaximizeHistogram()" title="Maximizar Histograma" id="btn-maximize-hist">🗖</button>
+                            <button class="btn btn-sm btn-primary" onclick="exportThermalHistogram('realtime')">💾 {{ t.charts.export_hist_png }}</button>
+                        </div>
+                    </div>
+                    <div class="thermal-histogram-full" id="thermal-hist-container">
+                        <button class="btn btn-sm btn-danger" onclick="toggleMaximizeHistogram()" id="btn-close-hist" style="display:none; position:absolute; top:10px; right:10px; z-index:10001;" title="Cerrar vista completa">✖</button>
+                        <canvas id="chart-thermal-histogram-full"></canvas>
+                    </div>
+                    <div class="thermal-histogram-stats-panel" id="thermal-hist-stats">
+                        <div class="thermal-histogram-stat">
+                            <div class="thermal-histogram-stat-value" id="thist-tmin">--</div>
+                            <div class="thermal-histogram-stat-label">T_min</div>
+                        </div>
+                        <div class="thermal-histogram-stat">
+                            <div class="thermal-histogram-stat-value" id="thist-tmean">--</div>
+                            <div class="thermal-histogram-stat-label">T_mean</div>
+                        </div>
+                        <div class="thermal-histogram-stat">
+                            <div class="thermal-histogram-stat-value" id="thist-tmax">--</div>
+                            <div class="thermal-histogram-stat-label">T_max</div>
+                        </div>
+                        <div class="thermal-histogram-stat">
+                            <div class="thermal-histogram-stat-value" id="thist-tstd">--</div>
+                            <div class="thermal-histogram-stat-label">σ</div>
+                        </div>
+                        <div class="thermal-histogram-stat">
+                            <div class="thermal-histogram-stat-value" id="thist-npixels">768</div>
+                            <div class="thermal-histogram-stat-label">{{ t.charts.n_pixels }}</div>
+                        </div>
+                        <div class="thermal-histogram-stat">
+                            <div class="thermal-histogram-stat-value" id="thist-trange">--</div>
+                            <div class="thermal-histogram-stat-label">{{ t.charts.range }}</div>
+                        </div>
+                    </div>
+                    <div class="thermal-histogram" style="display:none;"><canvas id="chart-thermal-histogram"></canvas></div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-thermal-measurement">
+                <div class="group-header" onclick="toggleGroup('g-thermal-measurement')">
+                    <span class="group-title">{{ t.charts.data_meas }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('thermal_measurement')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.mode }}:</span>
+                        <select id="thermal-mode">
+                            <option value="time">{{ t.charts.time_s }}</option>
+                            <option value="frames">{{ t.charts.frames }}</option>
+                            <option value="manual">{{ t.charts.manual }}</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.value }}:</span>
+                        <input type="number" id="thermal-meas-value" value="10" min="1">
+                    </div>
+                    <div class="text-center mt-4" style="font-size:20px; font-weight:700;" id="thermal-timer">00:00</div>
+                    <div class="btn-group mt-4">
+                        <button class="btn btn-sm btn-success" onclick="startThermalMeasurement()">▶ {{ t.charts.start_meas }}</button>
+                        <button class="btn btn-sm btn-danger" onclick="stopThermalMeasurement()">{{ t.sidebar.stop_meas }}</button>
+                        <button class="btn btn-sm" onclick="saveThermalMeasurement()">💾 {{ t.charts.save_data }}</button>
+                    </div>
+                    <div class="text-xs mt-4 font-bold" id="thermal-meas-status">{{ t.sidebar.label }} {{ t.charts.stopped }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-content" id="tab-analysis">
+        <div class="tab-chart-area">
+            <div style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                <div class="inner-tabs-header">
+                    <div class="inner-tab-btn active" data-inner-tab="analysis-intensity" onclick="switchInnerTab('analysis-intensity', this)">{{ t.charts.intensity }}</div>
+                    <div class="inner-tab-btn" data-inner-tab="analysis-absorbance" onclick="switchInnerTab('analysis-absorbance', this)">{{ t.charts.absorbance }}</div>
+                    <div class="inner-tab-btn" data-inner-tab="analysis-calibration" onclick="switchInnerTab('analysis-calibration', this)">{{ t.charts.cal_curve }}</div>
+                    <div class="inner-tab-btn" data-inner-tab="analysis-thermal" onclick="switchInnerTab('analysis-thermal', this)">{{ t.csv.thermal }} Offline</div>
+                </div>
+                <div class="chart-container" style="flex:1; position:relative;">
+                    <canvas id="chart-analysis-intensity"></canvas>
+                    <canvas id="chart-analysis-absorbance" class="hidden"></canvas>
+                    <canvas id="chart-analysis-calibration" class="hidden"></canvas>
+                    <div id="analysis-thermal-container" class="hidden" style="display:flex; flex-direction:column; align-items:center; width:100%; height:100%;">
+                        <div style="margin-bottom:10px; width:100%; display:flex; justify-content:center; align-items:center; gap:10px;">
+                            <label>{{ t.charts.measurement }}:</label>
+                            <select id="offline-thermal-select" onchange="renderOfflineThermalFrame(this.value)" style="padding:4px;">
+                                <option value="">({{ t.charts.select_data_proc }}...)</option>
+                            </select>
+                            <button class="btn btn-sm" onclick="exportOfflineThermalImage()" id="btn-export-offline-img" style="display:none; background-color: var(--accent-primary); color: white;">📷 Capturar {{ t.csv.frame }} Original HD</button>
+                        </div>
+                        <div style="display:flex; flex-direction:row; width:100%; flex:1; gap:10px;">
+                            <div style="flex:1; background: var(--chart-bg); position:relative; overflow:hidden;">
+                                <canvas id="offline-thermal-canvas" style="width:100%; height:100%; image-rendering:pixelated;"></canvas>
+                            </div>
+                            <div style="flex:1; position:relative; display:flex; flex-direction:column;">
+                                <div style="flex:1; position:relative;"><canvas id="offline-thermal-hist-canvas"></canvas></div>
+                                <div style="margin-top:8px; text-align:right;">
+                                    <button class="btn btn-sm btn-primary" onclick="exportThermalHistogram('offline')" id="btn-export-offline-hist" style="display:none;">💾 {{ t.charts.export_hist_png }}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tab-controls-area">
+            <div class="collapsible-group open" id="g-analysis-files">
+                <div class="group-header" onclick="toggleGroup('g-analysis-files')">
+                    <span class="group-title">{{ t.charts.load_csv_files }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('analysis_files')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <button class="btn btn-block btn-sm" onclick="document.getElementById('analysis-files').click()">{{ t.charts.select_csv_files }}...</button>
+                    <input type="file" id="analysis-files" multiple accept=".csv" style="display:none" onchange="handleAnalysisFiles(this)">
+                    <div class="table-container mt-4" id="analysis-files-container">
+                        <table class="data-table" id="analysis-files-table">
+                            <thead><tr><th>{{ t.menu.file }}</th><th>{{ t.csv.concentration }}</th><th>{{ t.menu.blank }}</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="btn-group mt-4">
+                        <button class="btn btn-sm" onclick="removeAnalysisFile()">{{ t.charts.delete_selected }}</button>
+                        <button class="btn btn-sm" onclick="clearAnalysisFiles()">{{ t.charts.clear_all }}</button>
+                    </div>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-analysis-params">
+                <div class="group-header" onclick="toggleGroup('g-analysis-params')">
+                    <span class="group-title">{{ t.help.analysis_params.title }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('analysis_params')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.cal_wavelength }}:</span>
+                        <select id="analysis-wl">
+                            {% for wl, label in wl_options %}<option value="{{ wl }}" {% if wl == 650 %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <span class="form-label">{{ t.charts.value }} ref. t-test:</span>
+                        <input type="number" id="analysis-ttest-ref" step="any" placeholder="μ₀ (opt.)">
+                    </div>
+                    <button class="btn btn-block btn-primary btn-sm mt-4" id="btn-process-analysis" onclick="processAnalysis()" disabled>{{ t.charts.process_data }}</button>
+                </div>
+            </div>
+            <div class="collapsible-group open" id="g-analysis-stats">
+                <div class="group-header" onclick="toggleGroup('g-analysis-stats')">
+                    <span class="group-title">{{ t.charts.stat_suite }}</span>
+                    <div class="group-header-buttons">
+                        <button class="group-toggle">▼</button>
+                        <button class="group-help" onclick="event.stopPropagation(); showContextHelp('analysis_stats')">?</button>
+                    </div>
+                </div>
+                <div class="group-content">
+                    <div class="stat-dashboard" id="analysis-stat-cards">
+                        <div class="stat-card info">
+                            <div class="stat-value info" id="astat-mean">--</div>
+                            <div class="stat-label">{{ t.charts.mean }} @λ</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value accent" id="astat-std">--</div>
+                            <div class="stat-label">σ @λ</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="astat-cv">--%</div>
+                            <div class="stat-label">%CV</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="astat-n">0</div>
+                            <div class="stat-label">n {{ t.units.samples }}</div>
+                        </div>
+                    </div>
+                    <div class="analysis-stats-block" id="analysis-descriptive-block" style="display:none;">
+                        <div class="asb-title">{{ t.charts.descriptive_stats }}</div>
+                        <div class="asb-grid" id="analysis-descriptive-grid"></div>
+                    </div>
+                    <div class="analysis-stats-block" id="analysis-normality-block" style="display:none;">
+                        <div class="asb-title">{{ t.charts.normality_test }}</div>
+                        <div id="analysis-normality-result"></div>
+                    </div>
+                    <div class="analysis-stats-block" id="analysis-ttest-block" style="display:none;">
+                        <div class="asb-title">⚖️ t-test</div>
+                        <div id="analysis-ttest-result"></div>
+                    </div>
+                    <div class="lod-loq-panel" id="analysis-lod-panel" style="display:none;">
+                        <div class="lod-loq-card">
+                            <div class="lod-label">LOD</div>
+                            <div class="lod-value" id="astat-lod">--</div>
+                            <div class="lod-unit">{{ t.units.in_x }}</div>
+                        </div>
+                        <div class="lod-loq-card">
+                            <div class="lod-label">LOQ</div>
+                            <div class="lod-value" id="astat-loq">--</div>
+                            <div class="lod-unit">{{ t.units.in_x }}</div>
+                        </div>
+                    </div>
+                    <div class="results-text" id="analysis-results" style="margin-top:8px;">{{ t.charts.no_analysis_results }}</div>
+                    <button class="btn btn-block btn-sm mt-4" onclick="exportAnalysisResults()" disabled id="btn-export-analysis">📊 {{ t.charts.export_analysis }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    <div class="bottom-dashboard" id="bottom-dashboard">
+        <div class="history-area" id="history-area">
+            <div class="history-header">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <h4>📊 {{ t.history.title }}</h4>
+                    <span id="history-count" class="badge">0</span>
+                    <button class="group-help" onclick="showContextHelp('history')" title="{{ t.menu.help }}" style="margin-left: 4px;">?</button>
+                </div>
+                <div class="history-controls">
+                    <button class="btn btn-sm" onclick="selectAllHistory()" title="{{ t.history.select_all }}">✅</button>
+                    <button class="btn btn-sm btn-primary" onclick="exportSelectedHistory()" title="{{ t.history.export_selected }}">💾</button>
+                    <button class="btn btn-sm" onclick="toggleMaximizeDashboards()" id="btn-maximize-dash" title="{{ t.history.maximize }}">🗖</button>
+                </div>
+            </div>
+            <div class="history-content" id="history-content">
+                <div class="history-table-wrapper">
+                    <table class="history-table" id="history-table">
+                        <thead>
+                            <tr>
+                                <th style="width:24px;"><input type="checkbox" onchange="toggleAllHistoryCheckboxes(this)"></th>
+                                <th>{{ t.history.type }}</th>
+                                <th>{{ t.history.timestamp }}</th>
+                                <th title="{{ t.history.bs_tooltip }}">{{ t.history.bs }}</th>
+                                <th title="450 nm — Azul Profundo" style="color: #4a00ff;">450</th>
+                                <th title="500 nm — Cian" style="color: #00e5ff;">500</th>
+                                <th title="550 nm — Verde Vibrante" style="color: #00ff44;">550</th>
+                                <th title="570 nm — Amarillo" style="color: #ffe600;">570</th>
+                                <th title="600 nm — Naranja" style="color: #ff8c00;">600</th>
+                                <th title="650 nm — Rojo" style="color: #ff1111;">650</th>
+                                <th title="{{ t.history.a_dom_tooltip }}">{{ t.history.a_dom }}</th>
+                                <th title="{{ t.history.t_dom_tooltip }}">{{ t.history.t_dom }}</th>
+                                <th title="{{ t.history.thermal_tooltip }}">{{ t.history.thermal_col }}</th>
+                                <th style="width:30px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody"></tbody>
+                    </table>
+                    <div id="history-empty-msg" class="text-center p-8 text-muted">
+                        {{ t.history.no_measurements }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+<div class="modal-overlay" id="modal-help">
+    <div class="modal" style="width:1000px; max-width:95vw; height:85vh; display:flex; flex-direction:column;">
+        <h2>{{ t.menu.help }} General / {{ t.charts.manual }} Instrumental</h2>
+        <div style="display:flex; gap:16px; flex:1; min-height:0; margin-top:16px; overflow:hidden;">
+            <div style="min-width:250px; max-width:300px; overflow-y:auto; border-right:1px solid var(--border-color); padding-right:16px;">
+                <ul class="help-tree" id="help-tree"></ul>
+            </div>
+            <div class="help-content" id="help-content" style="flex:1; overflow-y:auto; padding-left:8px; padding-right:16px;">
+                <p>{{ t.help_intro_msg }}</p>
+            </div>
+        </div>
+        <div class="modal-buttons" style="margin-top:auto; padding-top:16px;">
+            <button class="btn btn-primary" onclick="closeModal('modal-help')">{{ t.close }} {{ t.charts.manual }}</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-about">
+    <div class="modal">
+        <h2>{{ t.menu.about }}</h2>
+        <h3 style="color:var(--accent-primary)">{{ t.app_info.title }}</h3>
+        <p>{{ t.app_info.desc }}</p>
+        <p><b>{{ t.developed_by }}:</b> Sebastian Herrera Betancur</p>
+        <p><b>{{ t.research_group }}:</b> Biomicrosystems Research Group</p>
+        <p><i>Universidad de los Andes, Bogotá, Colombia</i></p>
+        <hr style="margin: 15px 0; border: 0; border-top: 1px solid var(--bg-tertiary);">
+        <div style="font-size: 0.85em; color: var(--text-secondary); line-height: 1.4;">
+            <p><strong>PROPRIETARY SOFTWARE - ALL RIGHTS RESERVED</strong></p>
+            <p>This software is a professional analytical tool and is protected by copyright laws. 
+            Unauthorized use, distribution, or modification is strictly prohibited without 
+            express written consent from the author, the University, or the Research Group.</p>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn btn-primary" onclick="closeModal('modal-about')">{{ t.close }}</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-context-help">
+    <div class="modal" style="width:700px; max-width:95vw; max-height:80vh; display:flex; flex-direction:column;">
+        <h2>💡 {{ t.context_help_title }}</h2>
+        <div id="context-help-content" style="flex:1; min-height:0; overflow-y:auto; margin-top:12px; margin-bottom:16px; padding-right:12px; font-size:1.05em; line-height:1.6;"></div>
+        <div class="modal-buttons" style="margin-top:auto;">
+            <button class="btn btn-primary" onclick="closeModal('modal-context-help')">{{ t.understood }}</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-startup">
+    <div class="modal">
+        <h2>⚡ {{ t.important }} - RPi I2C + MLX90640</h2>
+        <h3 style="color:var(--accent-primary)">{{ t.startup_modal.spectrometer }} + {{ t.startup_modal.thermal_cam }}</h3>
+        <p><b>{{ t.app_info.desc }}</b></p>
+        <p><b>{{ t.startup_modal.sensor_connections }}:</b></p>
+        <ul style="margin:10px 0; padding-left:24px; line-height:1.8;">
+            <li><b>MLX90640 ({{ t.startup_modal.thermal_cam }}) – I2C-1:</b> SDA → GPIO2 (pin 3), SCL → GPIO3 (pin 5)</li>
+            <li><b>AS726X ({{ t.startup_modal.spectrometer }}) – I2C-22:</b> SDA → GPIO23 (pin 16), SCL → GPIO24 (pin 18)</li>
+            <li><b>{{ t.startup_modal.ext_led }}:</b> VIN → GPIO17</li>
+        </ul>
+        <p><b>{{ t.important }}:</b> {{ t.i2c_22_hint }}</p>
+        <div style="margin-top: 15px; background: var(--bg-hover); padding: 10px; border-radius: 8px;">
+            <p style="margin-block-end: 8px;"><b>{{ t.menu.language }}:</b></p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                {% for lang_code, lang_label in available_langs %}
+                <button class="btn btn-secondary" onclick="setLanguage('{{ lang_code }}')" style="flex:1; min-width: 100px;">{{ lang_label }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="modal-buttons" style="margin-top: 20px;">
+            <button class="btn btn-primary" onclick="sessionStorage.setItem('startup_modal_seen', 'true'); closeModal('modal-startup')">{{ t.understood }}</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-export-graph">
+    <div class="modal" style="width: 500px; max-width: 90vw;">
+        <h2>{{ t.export_graph.title }}</h2>
+        <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">{{ t.export_graph.subtitle }}</p>
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; margin-bottom:4px; font-weight:bold; color:var(--text-secondary);">{{ t.export_graph.report_title }}</label>
+            <input type="text" id="export-graph-title" class="input-modern" placeholder="{{ t.export_graph.placeholder }}" style="width:100%;">
+        </div>
+        <div style="margin-bottom: 12px; display:flex; gap:16px;">
+            <div style="flex:1;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold; color:var(--text-secondary);">{{ t.export_graph.lang }}</label>
+                <select id="export-graph-lang" class="input-modern" style="width:100%;">
+                    <option value="es" selected>Español (ES)</option>
+                    <option value="en">English (EN)</option>
+                </select>
+            </div>
+            <div style="flex:1;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold; color:var(--text-secondary);">{{ t.export_graph.format }}</label>
+                <select id="export-graph-bg" class="input-modern" style="width:100%;">
+                    <option value="white" selected>{{ t.export_graph.white_bg }}</option>
+                </select>
+            </div>
+        </div>
+        <div style="margin-bottom: 16px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="export-graph-metadata" checked>
+                <span style="font-size:13px; color:var(--text-secondary);">{{ t.export_graph.metadata }}</span>
+            </label>
+        </div>
+        <div class="modal-buttons" style="justify-content:flex-end; gap:10px;">
+            <button class="btn btn-sm" onclick="closeModal('modal-export-graph')" style="background:var(--bg-tertiary);">{{ t.export_graph.cancel }}</button>
+            <button class="btn btn-sm btn-primary" onclick="processGraphExport()">{{ t.export_graph.generate }}</button>
+        </div>
+    </div>
+</div>
+<script>
+    window.translations = {{ t_json|safe }};
+    async function setLanguage(lang) {
+        // Save that we've "seen" the modal in this session so it doesn't reappear on reload
+        sessionStorage.setItem('startup_modal_seen', 'true');
+        if (typeof closeModal === 'function') closeModal('modal-startup');
+        let csrftoken = '';
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                if (c.trim().startsWith('csrftoken=')) {
+                    csrftoken = decodeURIComponent(c.trim().substring(10));
+                }
+            });
+        }
+        await fetch("/api/set_language/", {
+            method: "POST", 
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken
+            }, 
+            body: JSON.stringify({language: lang})
+        });
+        location.reload();
+    }
+</script>
+<script src="{% static 'spectrometer/js/app.js' %}?v={% now 'U' %}"></script>
+<script>
+    // After app.js loads, we check if we should show the modal
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('modal-startup');
+        const hasSeen = sessionStorage.getItem('startup_modal_seen');
+        if (hasSeen === 'true') {
+            modal.classList.remove('active');
+            // We can clear it if we want it to show next time the browser is closed? 
+            // Or just leave it. The user said "one click" so we don't want it again.
+        }
+    });
+    // We also need to override the app.js auto-show logic if it exists
+    // The previous app.js logic was: setTimeout(() => modal.classList.add('active'), 500)
+</script>
+<footer style="position: fixed; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: rgba(255,255,255,0.6); padding: 4px 12px; font-size: 10px; z-index: 9999; border-top-left-radius: 8px; pointer-events: none;">
+    © 2026 Universidad de los Andes - Biomicrosystems Group | PROPRIETARY SOFTWARE - Unauthorized Use Prohibited
+</footer>
+</body>
+</html>

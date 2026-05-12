@@ -1,0 +1,387 @@
+<!--
+  Copyright (c) 2026 Sebastian Herrera Betancur
+  Biomicrosystems Research Group | Universidad de los Andes
+  PROPRIETARY CODE - Unauthorized use, copying or distribution is strictly prohibited.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Technical Architecture - Spectrophotometer 2026</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        :root {
+            --bg-color: #f8fafc;
+            --sidebar-bg: #0f172a;
+            --accent-l1: #3b82f6;
+            --accent-l2: #8b5cf6;
+            --accent-l3: #f59e0b;
+            --accent-l4: #10b981;
+            --text-main: #334155;
+            --text-heading: #0f172a;
+            --border-color: #e2e8f0;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            min-height: 100vh;
+        }
+
+        /* SIDEBAR - Technical Specs */
+        aside {
+            background: var(--sidebar-bg);
+            color: #f8fafc;
+            padding: 40px 25px;
+            overflow-y: auto;
+            border-right: 1px solid #1e293b;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+
+        .sidebar-section { margin-bottom: 30px; }
+        .sidebar-section h3 {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #94a3b8;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 4px;
+        }
+
+        .tech-list { list-style: none; padding: 0; margin: 0; }
+        .tech-list li {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            padding: 6px 0;
+            border-bottom: 1px solid #1e293b;
+        }
+        .tech-list li b { color: #38bdf8; }
+
+        .constants-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+        }
+        .const-item { 
+            background: #1e293b; 
+            padding: 8px; 
+            border-radius: 6px;
+            border-left: 2px solid var(--accent-l1);
+        }
+
+        /* MAIN - Architecture Deep Dive */
+        main { padding: 50px 60px; }
+
+        .header { 
+            margin-bottom: 40px; 
+            border-bottom: 2px solid #cbd5e1; 
+            padding-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 { 
+            font-size: 2.2rem; 
+            font-weight: 800; 
+            margin: 0; 
+            letter-spacing: -0.04em; 
+            color: var(--text-heading); 
+        }
+        .header .badge { 
+            background: var(--accent-l2); 
+            color: white; 
+            padding: 6px 14px; 
+            border-radius: 99px; 
+            font-size: 0.75rem; 
+            font-weight: 700;
+        }
+
+        .layer-block {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .layer-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .layer-number {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 1.2rem;
+        }
+
+        .layer-content { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+
+        .sub-section h4 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            color: var(--text-heading);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.05em;
+        }
+
+        .deep-dive-box {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 18px;
+            border-left: 4px solid #cbd5e1;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .code-snippet {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+        .tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #e2e8f0;
+            margin-right: 4px;
+            margin-bottom: 4px;
+            display: inline-block;
+            color: #475569;
+        }
+
+        .protocol-table {
+            width: 100%;
+            font-size: 0.75rem;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .protocol-table th, .protocol-table td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+        .protocol-table th { background: #f1f5f9; color: var(--text-heading); font-weight: 600; }
+
+        .bg-l1 { background: var(--accent-l1); }
+        .bg-l2 { background: var(--accent-l2); }
+        .bg-l3 { background: var(--accent-l3); }
+        .bg-l4 { background: var(--accent-l4); }
+
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+
+    <aside>
+        <div class="sidebar-section">
+            <h3>SOFTWARE STACK V.2026</h3>
+            <ul class="tech-list">
+                <li>Django Core <b>6.0.x</b></li>
+                <li>Python Runtime <b>3.11+</b></li>
+                <li>Signal Processing <b>NumPy/SciPy</b></li>
+                <li>Data Viz <b>Chart.js 4.0</b></li>
+                <li>I2C Communication <b>Smbus2</b></li>
+            </ul>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>SYSTEM CONSTANTS</h3>
+            <div class="constants-grid">
+                <div class="const-item">Wavelengths: 450, 500, 550, 570, 600, 650nm</div>
+                <div class="const-item">AS726X I2C Addr: 0x49</div>
+                <div class="const-item">Spectral Bus: 22</div>
+                <div class="const-item">Thermal Bus: 1</div>
+                <div class="const-item">GPIO Pin (LED): 17</div>
+                <div class="const-item">Thermal Matrix: 32x24 px</div>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>GLOBAL STATE SCHEMA</h3>
+            <ul style="font-size: 0.75rem; color: #94a3b8; padding-left: 15px; line-height: 1.6;">
+                <li><code>is_connected</code> (boolean)</li>
+                <li><code>app_state</code> (IDLE / MEASURING)</li>
+                <li><code>last_cal_values</code> (Float32Array[6])</li>
+                <li><code>thermal_sync</code> (Atomic Boolean)</li>
+                <li><code>transfer_model</code> (Regr. Params)</li>
+            </ul>
+        </div>
+    </aside>
+
+    <main>
+        <div class="header">
+            <h1>Master Architectural Blueprint</h1>
+            <span class="badge">TECHNICAL AUDIT 2026</span>
+        </div>
+
+        <!-- LAYER 1 -->
+        <div class="layer-block">
+            <div class="layer-title">
+                <div class="layer-number bg-l1">1</div>
+                <h2>Reactive UI Layer (Frontend Engine)</h2>
+            </div>
+            <div class="layer-content">
+                <div class="sub-section">
+                    <h4>Interface & State Synchronization</h4>
+                    <p>Event-driven architecture that ensures sub-millisecond synchronization between the physical hardware state and the DOM.</p>
+                    <div class="deep-dive-box">
+                        <b>Core Implementation Patterns:</b>
+                        <ul style="margin-top: 8px; padding-left: 18px;">
+                            <li><b>Reactive appState:</b> Centralized store for real-time telemetry.</li>
+                            <li><b>Custom Chart Plugins:</b> Dynamic background rendering based on theme.</li>
+                            <li><b>Adaptive Polling:</b> Log polling (3s) vs. High-speed Thermal frames (500ms).</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="sub-section">
+                    <h4>Frontend Module Logic (app.js)</h4>
+                    <div class="tag">initCharts()</div><div class="tag">updateSpectrumChart()</div>
+                    <div class="tag">apiPost()</div><div class="tag">setLanguage()</div>
+                    <div class="code-snippet">
+// Visualization Synchronization Logic
+const updateChart = (isMeasuring) => {
+    chartSpectrum.data.datasets = newConfigs;
+    chartSpectrum.update(isMeasuring ? 'none' : 'default');
+};
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LAYER 2 -->
+        <div class="layer-block">
+            <div class="layer-title">
+                <div class="layer-number bg-l2">2</div>
+                <h2>Orchestration Layer (Django Backend)</h2>
+            </div>
+            <div class="layer-content">
+                <div class="sub-section">
+                    <h4>State Control & Concurrency</h4>
+                    <p>Robust middleware handling multi-threaded hardware access while maintaining data integrity across REST requests.</p>
+                    <div class="deep-dive-box">
+                        <b>Technical Guarantees:</b>
+                        <ul style="margin-top: 8px; padding-left: 18px;">
+                            <li><b>Mutex Locking:</b> <code>threading.Lock()</code> prevents I2C bus collisions.</li>
+                            <li><b>Security:</b> <code>ensure_csrf_cookie</code> for cross-site attack mitigation.</li>
+                            <li><b>Context Persistence:</b> Session-based localization and theme memory.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="sub-section">
+                    <h4>REST API Endpoints</h4>
+                    <table class="protocol-table">
+                        <tr><th>Endpoint</th><th>Operational Responsibility</th></tr>
+                        <tr><td><code>/api/connect/</code></td><td>I2C Handshake & LED Init</td></tr>
+                        <tr><td><code>/api/start_measurement/</code></td><td>M-samples / P-points Orchestration</td></tr>
+                        <tr><td><code>/api/calculate_concentration/</code></td><td>Beer-Lambert Law Execution Engine</td></tr>
+                        <tr><td><code>/api/export_data/</code></td><td>Atomic CSV Stream Serialization</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- LAYER 3 -->
+        <div class="layer-block">
+            <div class="layer-title">
+                <div class="layer-number bg-l3">3</div>
+                <h2>Analytical Science Engine</h2>
+            </div>
+            <div class="layer-content">
+                <div class="sub-section">
+                    <h4>Data Processing Pipeline</h4>
+                    <div class="deep-dive-box">
+                        <b>Analytical Workflow:</b>
+                        <ul style="margin-top: 8px; padding-left: 18px;">
+                            <li><b>Baseline Correction:</b> Blank subtraction (I - I₀) for net intensity.</li>
+                            <li><b>Signal Conversion:</b> ADC raw data to Transmittance and Absorbance.</li>
+                            <li><b>Curve Fitting:</b> Least-squares regression via <code>scipy.stats.linregress</code>.</li>
+                            <li><b>Normalization:</b> Post-capture inter-instrumental model alignment.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="sub-section">
+                    <h4>Thermal Processing (MLX90640)</h4>
+                    <div class="code-snippet">
+# ROI Statistical Calculation
+mean_t = np.mean(flat_frame)
+std_t = np.std(flat_frame)
+# 25-level histogram for outlier detection
+                    </div>
+                    <p style="font-size: 0.8rem; margin-top: 10px;">Generates 25-bin histograms and 10/90 percentile filtering for high-accuracy sample temperature estimation.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- LAYER 4 -->
+        <div class="layer-block">
+            <div class="layer-title">
+                <div class="layer-number bg-l4">4</div>
+                <h2>HAL & Low-Level Connectivity</h2>
+            </div>
+            <div class="layer-content">
+                <div class="sub-section">
+                    <h4>I2C Protocol Internals</h4>
+                    <p>Low-level communication utilizing 16/32-bit hardware register maps for raw sensor access.</p>
+                    <table class="protocol-table">
+                        <tr><th>Register Map</th><th>Functional Purpose</th></tr>
+                        <tr><td><code>0x00 (STATUS)</code></td><td>Validation of RX/TX buffer states</td></tr>
+                        <tr><td><code>0x01 (WRITE)</code></td><td>Virtual register addressing bridge</td></tr>
+                        <tr><td><code>0x04 (CONTROL)</code></td><td>Integration time and gain parameters</td></tr>
+                        <tr><td><code>0x14 - 0x28</code></td><td>IEEE 754 Float spectral data output</td></tr>
+                    </table>
+                </div>
+                <div class="sub-section">
+                    <h4>Hardware Drivers</h4>
+                    <div class="deep-dive-box">
+                        <ul style="margin-top: 8px; padding-left: 18px;">
+                            <li><b>AS726X:</b> SMBus with 50ms polling timeout for register stability.</li>
+                            <li><b>MLX90640:</b> Background threading for 2Hz asynchronous acquisition.</li>
+                            <li><b>GPIO (RPi):</b> Binary BCM control for high-precision LED strobing.</li>
+                            <li><b>Mocks:</b> Synthetic data injection with Gaussian noise for CI testing.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2026 Spectrophotometer Project | Professional Research Architecture | Deep-Dive Documentation</p>
+        </footer>
+    </main>
+
+</body>
+</html>

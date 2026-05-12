@@ -1,0 +1,748 @@
+--- 
++++ 
+@@ -23,0 +24 @@
++    measurementHistory: [],
+@@ -24,0 +26,16 @@
++
++// ─── Translation Helper ───
++/**
++ * Helper to get a translated string by dot-path (e.g., 'menu.file')
++ * Fallback to key or defaultValue if not found.
++ */
++function t(path, defaultValue) {
++    if (!window.translations) return defaultValue || path;
++    const keys = path.split('.');
++    let result = window.translations;
++    for (const key of keys) {
++        if (result[key] === undefined) return defaultValue || path;
++        result = result[key];
++    }
++    return result;
++}
+@@ -41 +58 @@
+-    // Show startup modal after short delay
++    // Show startup modal after short delay if not seen before
+@@ -43 +60,3 @@
+-        document.getElementById('modal-startup').classList.add('active');
++        if (localStorage.getItem('startup_modal_seen') !== 'true') {
++            document.getElementById('modal-startup').classList.add('active');
++        }
+@@ -48,2 +67,2 @@
+-    addLog('Aplicación web iniciada correctamente.');
+-    addLog('Para comenzar, conecte al sensor I2C.');
++    addLog(t('logs.app_started', 'Aplicación web iniciada correctamente.'));
++    addLog(t('logs.connect_hint', 'Para comenzar, conecte al sensor I2C.'));
+@@ -52,0 +72,5 @@
++    addLog("DEBUG: Starting initCharts...");
++    if (typeof Chart === 'undefined') {
++        addLog("DEBUG: ERROR - Chart is undefined!");
++        return;
++    }
+@@ -66,10 +90,18 @@
+-    // Spectrum chart
+-    chartSpectrum = new Chart(document.getElementById('chart-spectrum'), {
+-        type: 'line',
+-        data: { labels: WL_LABELS, datasets: [] },
+-        options: {
+-            ...commonOptions,
+-            plugins: { ...commonOptions.plugins, title: { display: true, text: 'Espectro de Intensidad', color: getTextColor(), font: { size: 14 } } },
+-            scales: {
+-                x: { ...commonOptions.scales.x, title: { display: true, text: 'Longitud de Onda (nm)', color: getTextColor() } },
+-                y: { ...commonOptions.scales.y, title: { display: true, text: 'Intensidad', color: getTextColor() } },
++    try {
++        chartSpectrum = new Chart(document.getElementById('chart-spectrum'), {
++            type: 'line',
++            data: { 
++                labels: WL_LABELS, 
++                datasets: [{ 
++                    label: '', 
++                    data: [], 
++                    hidden: true 
++                }] 
++            },
++            options: {
++                ...commonOptions,
++                plugins: { ...commonOptions.plugins, title: { display: true, text: t('charts.intensity_spectrum', 'Espectro de Intensidad'), color: getTextColor(), font: { size: 14 } } },
++                scales: {
++                    x: { ...commonOptions.scales.x, title: { display: true, text: t('sidebar.wavelength', 'Longitud de Onda') + ' (nm)', color: getTextColor() } },
++                    y: { ...commonOptions.scales.y, title: { display: true, text: t('charts.intensity', 'Intensidad'), color: getTextColor(), min: 0 } },
++                }
+@@ -77,2 +109,5 @@
+-        }
+-    });
++        });
++        addLog("DEBUG: chartSpectrum initialized.");
++    } catch (e) {
++        addLog("DEBUG: ERROR initializing chartSpectrum: " + e.message);
++    }
+@@ -86 +121 @@
+-            plugins: { ...commonOptions.plugins, title: { display: true, text: 'Curva Conc. vs Medición', color: getTextColor(), font: { size: 14 } } },
++            plugins: { ...commonOptions.plugins, title: { display: true, text: t('tabs.conc', 'Curva Conc. vs Medición'), color: getTextColor(), font: { size: 14 } } },
+@@ -88,2 +123,2 @@
+-                x: { type: 'linear', title: { display: true, text: 'Valor X (Eje Variable)', color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
+-                y: { title: { display: true, text: 'Valor Y Medido', color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
++                x: { type: 'linear', title: { display: true, text: t('charts.val_x', 'Valor X (Eje Variable)'), color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
++                y: { title: { display: true, text: t('charts.val_y', 'Valor Y Medido'), color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
+@@ -100 +135 @@
+-            plugins: { ...commonOptions.plugins, title: { display: true, text: 'Curva de Calibración', color: getTextColor(), font: { size: 14 } } },
++            plugins: { ...commonOptions.plugins, title: { display: true, text: t('tabs.cal', 'Curva de Calibración'), color: getTextColor(), font: { size: 14 } } },
+@@ -102,2 +137,2 @@
+-                x: { type: 'linear', title: { display: true, text: 'Concentración', color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
+-                y: { title: { display: true, text: 'Absorbancia', color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
++                x: { type: 'linear', title: { display: true, text: t('charts.creg_title', 'Concentración'), color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
++                y: { title: { display: true, text: t('charts.absorbance', 'Absorbancia'), color: getTextColor() }, ticks: { color: getTextColor() }, grid: { color: getGridColor() } },
+@@ -144 +179 @@
+-        addLog('Error de comunicación: ' + e.message, true);
++        addLog(t('logs.comm_error', 'Error de comunicación: ').replace('{msg}', e.message), true);
+@@ -154 +189 @@
+-        addLog('Error de comunicación: ' + e.message, true);
++        addLog(t('logs.comm_error', 'Error de comunicación: ').replace('{msg}', e.message), true);
+@@ -161 +196 @@
+-    addLog('Intentando conexión I2C...');
++    addLog(t('logs.i2c_attempt', 'Intentando conexión I2C...'));
+@@ -169 +204 @@
+-        addLog('✅ ' + res.message);
++        addLog('✅ ' + t('logs.connected_ok', 'Conexión exitosa'));
+@@ -178 +213 @@
+-        addLog('❌ Error: ' + res.message, true);
++        addLog('❌ ' + t('status.label', 'Estado:') + ' ' + res.message, true);
+@@ -187 +222 @@
+-        addLog('🔌 ' + res.message);
++        addLog('🔌 ' + t('logs.disconnected_ok', 'Desconectado correctamente'));
+@@ -207 +242 @@
+-        statusLabel.textContent = 'Estado: Conectado (I2C Real)';
++        statusLabel.textContent = t('status.label', 'Estado:') + ' ' + t('status.connected_real', 'Conectado (I2C Real)');
+@@ -210 +245 @@
+-        badge.textContent = '⚡ REAL';
++        badge.textContent = '⚡ ' + t('status.real', 'REAL');
+@@ -221 +256 @@
+-        statusLabel.textContent = 'Estado: Desconectado';
++        statusLabel.textContent = t('status.label', 'Estado:') + ' ' + t('status.disconnected', 'Desconectado');
+@@ -224 +259 @@
+-        badge.textContent = '⚡ DESCONECTADO';
++        badge.textContent = '⚡ ' + t('status.disconnected', 'DESCONECTADO').toUpperCase();
+@@ -239 +274 @@
+-    addLog('Midiendo referencia I₀...');
++    addLog(t('logs.measuring_ref', 'Midiendo referencia I₀...'));
+@@ -245 +280 @@
+-        document.getElementById('blank-status').textContent = 'Referencia I₀ medida ✓';
++        document.getElementById('blank-status').textContent = t('logs.ref_ok_short', 'Referencia I₀ medida ✓');
+@@ -248 +283 @@
+-        addLog('✅ Referencia I₀ medida correctamente');
++        addLog('✅ ' + t('logs.ref_ok', 'Referencia I₀ medida correctamente'));
+@@ -249,0 +285 @@
++        addMeasurementToHistory('calibration', res.values);
+@@ -251 +287 @@
+-        addLog('❌ Error: ' + res.message, true);
++        addLog('❌ ' + t('status.label', 'Estado:') + ' ' + res.message, true);
+@@ -262 +298 @@
+-    addLog(`Iniciando medición: ${mtype} (M=${m}, P=${p})`);
++    addLog(t('logs.starting_meas', 'Iniciando medición: ') + `${mtype} (M=${m}, P=${p})`);
+@@ -268,2 +304,2 @@
+-    if (mtype === 'Continuo') {
+-        // Desactivado manualmente con 'none' en el update
++    if (mtype === 'continuous') {
++        let c_collected = 0;
+@@ -272 +308 @@
+-                type: 'Continuo',
++                type: 'continuous',
+@@ -277,0 +314 @@
++                    c_collected++;
+@@ -280 +317,2 @@
+-                    addLog(`[En vivo] Medición: [${valsStr}]`);
++                    addLog(`[${t('logs.live', 'En vivo')}] ${t('logs.meas', 'Medición')}: [${valsStr}]`);
++                    addMeasurementToHistory('continuous', res.values, null, `#${c_collected} (M=${m})`);
+@@ -285,3 +323,2 @@
+-                let errMsg = res ? res.message : 'Error desconocido';
+-                addLog('⚠️ Error I2C: ' + errMsg + ' (Reintentando...)', true);
+-                // No llamamos a stopMeasurement() ni break para que reintente.
++                let errMsg = res ? res.message : t('logs.unknown_err', 'Error desconocido');
++                addLog('⚠️ ' + t('status.label', 'Estado:') + ' I2C: ' + errMsg + ' (' + t('logs.retrying', 'Reintentando...') + ')', true);
+@@ -291 +328 @@
+-    } else if (mtype === 'Único (Promediado)') {
++    } else if (mtype === 'single') {
+@@ -293 +330 @@
+-            type: 'Único (Promediado)',
++            type: 'single',
+@@ -303 +340 @@
+-            addLog(`[Único M=${m}] [${valsStr}]`);
++            addLog(`[${t('logs.single', 'Único')} M=${m}] [${valsStr}]`);
+@@ -306 +343,2 @@
+-            addLog(`✅ Medición completada. T=${res.thermal_temp || '--'}°C`);
++            addMeasurementToHistory('single', res.values, null, `M=${m}`);
++            addLog('✅ ' + t('logs.analysis_processed', 'Medición completada'));
+@@ -308 +346 @@
+-            addLog('❌ Error: ' + res.message, true);
++            addLog('❌ ' + t('status.label', 'Estado:') + ' ' + res.message, true);
+@@ -315 +353 @@
+-    } else if (mtype === 'Secuencial (Automático)') {
++    } else if (mtype === 'sequential') {
+@@ -321 +359 @@
+-                type: 'Único (Promediado)',
++                type: 'single',
+@@ -331 +369 @@
+-                addLog(`[Secuencial #${p_collected + 1}] [${valsStr}]`);
++                addLog(`[${t('logs.sequential', 'Secuencial')} #${p_collected + 1}] [${valsStr}]`);
+@@ -338 +375,0 @@
+-                // Req4: Capture full thermal stats if sync is enabled
+@@ -350 +387 @@
+-                            addLog(`   🌡️ Térmica capturada: mean=${thermalData.mean.toFixed(2)} min=${thermalData.min.toFixed(2)} max=${thermalData.max.toFixed(2)}`);
++                            addLog(`   🌡️ ${t('logs.thermal_captured', 'Térmica capturada')}: mean=${thermalData.mean.toFixed(2)} min=${thermalData.min.toFixed(2)} max=${thermalData.max.toFixed(2)}`);
+@@ -353 +390 @@
+-                        addLog('   ⚠️ No se pudo capturar frame térmico', true);
++                        addLog('   ⚠️ ' + t('logs.thermal_fail', 'No se pudo capturar frame térmico'), true);
+@@ -355,0 +393,3 @@
++
++                // Record to history AFTER thermal data is available
++                addMeasurementToHistory('sequential', res.values, thermalData, `P=${p_collected}/${p} M=${m}`);
+@@ -364 +404 @@
+-                addLog(`✅ Punto Secuencial P=${p_collected}/${p} recolectado. T=${temp}°C`);
++                addLog(`✅ ${t('logs.point_collected', 'Punto recolectado')} P=${p_collected}/${p}. T=${temp}°C`);
+@@ -369 +409 @@
+-                addLog('❌ Error: ' + res.message, true);
++                addLog('❌ ' + t('status.label', 'Estado:') + ' ' + res.message, true);
+@@ -374 +413,0 @@
+-                // Pausa entre puntos P según la lógica original de Python (100ms o más)
+@@ -380 +419 @@
+-            addLog('✅ Medición Secuencial terminada por completo.');
++            addLog('✅ ' + t('logs.seq_finished', 'Medición Secuencial terminada por completo.'));
+@@ -392 +430,0 @@
+-    // Animación reactivada implícitamente al dejar de pasar 'none'
+@@ -396 +434 @@
+-    addLog('Medición detenida');
++    addLog(t('logs.meas_stopped', 'Measurement stopped'));
+@@ -402,2 +440 @@
+-    pInput.disabled = mtype !== 'Secuencial (Automático)';
+-    // Req4: enable/disable thermal sync checkbox
++    pInput.disabled = mtype !== 'sequential';
+@@ -406 +443 @@
+-        if (mtype === 'Secuencial (Automático)') {
++        if (mtype === 'sequential') {
+@@ -418 +455 @@
+-        if (mtype === 'Secuencial (Automático)') {
++        if (mtype === 'sequential') {
+@@ -426 +462,0 @@
+-// Req4: thermal sync checkbox handler
+@@ -431 +467 @@
+-    addLog(`Captura térmica sincronizada: ${appState.thermalSyncEnabled ? 'Activada' : 'Desactivada'}`);
++    addLog(`${t('logs.thermal_sync', 'Captura térmica sincronizada').replace('{status}', appState.thermalSyncEnabled ? t('status.on', 'Activada') : t('status.off', 'Desactivada'))}`);
+@@ -439,13 +475 @@
+-// ─── Numeric Display ───
+-function updateNumericDisplay() {
+-    WAVELENGTHS.forEach((wl, i) => {
+-        const calCell = document.getElementById(`cal-val-${wl}`);
+-        const measCell = document.getElementById(`meas-val-${wl}`);
+-        if (appState.lastCalValues) {
+-            calCell.textContent = appState.lastCalValues[i].toFixed(2);
+-        }
+-        if (appState.lastMeasValues) {
+-            measCell.textContent = appState.lastMeasValues[i].toFixed(2);
+-        }
+-    });
+-}
++// ─── Numeric Display (Legacy removed — data now in history table) ───
+@@ -456,2 +480,2 @@
+-    let yLabel = 'Intensidad';
+-    let title = 'Espectro de Intensidad';
++    let yLabel = t('charts.intensity', 'Intensidad');
++    let title = t('charts.intensity_spectrum', 'Espectro de Intensidad');
+@@ -463 +487 @@
+-                label: 'Medición (I)',
++                label: t('charts.meas', 'Medición (I)'),
+@@ -477 +501 @@
+-                label: 'Referencia (I₀)',
++                label: t('charts.ref', 'Referencia (I₀)'),
+@@ -488,2 +512,2 @@
+-        yLabel = 'Absorbancia';
+-        title = 'Espectro de Absorbancia';
++        yLabel = t('charts.absorbance', 'Absorbancia');
++        title = t('charts.absorbance_spectrum', 'Espectro de Absorbancia');
+@@ -493 +517 @@
+-                label: 'Absorbancia',
++                label: t('charts.absorbance', 'Absorbancia'),
+@@ -506,2 +530,2 @@
+-        yLabel = 'Transmitancia (%T)';
+-        title = 'Espectro de Transmitancia';
++        yLabel = t('charts.transmittance', 'Transmitancia (%T)');
++        title = t('charts.transmittance_spectrum', 'Espectro de Transmitancia');
+@@ -514 +538 @@
+-                label: 'Transmitancia (%T)',
++                label: t('charts.transmittance', 'Transmitancia (%T)'),
+@@ -527,2 +550,0 @@
+-    // Actualización inteligente: No recrear datasets si no cambió la estructura 
+-    // Esto previene que Chart.js se cuelgue al dibujar en bucles rápidos
+@@ -553 +574,0 @@
+-    // Al desactivar animación en tiempo real se asegura el flujo continuo visual sin saltos
+@@ -586 +607 @@
+-        alert('Debe estar en modo Absorbancia para calcular concentración');
++        alert(t('alerts.need_abs', 'Debe estar en modo Absorbancia para calcular concentración'));
+@@ -600,2 +621,2 @@
+-        document.getElementById('conc-abs-custom').textContent = `A_custom (@${wl}nm): ${res.a_custom.toFixed(4)}`;
+-        document.getElementById('conc-abs-adjusted').textContent = res.a_adjusted ? `A_ajustada (@${wl}nm): ${res.a_adjusted.toFixed(4)}` : 'A_ajustada (@λ): N/A';
++        document.getElementById('conc-abs-custom').textContent = `${t('charts.a_custom', 'A_custom')} (@${wl}nm): ${res.a_custom.toFixed(4)}`;
++        document.getElementById('conc-abs-adjusted').textContent = res.a_adjusted ? `${t('charts.a_adjusted', 'A_adjusted')} (@${wl}nm): ${res.a_adjusted.toFixed(4)}` : `${t('charts.a_adjusted', 'A_adjusted')} (@λ): N/A`;
+@@ -603 +624 @@
+-        addLog(`Concentración calculada: ${res.concentration.toExponential(4)}`);
++        addLog(`${t('logs.calc_conc', 'Concentración calculada')}: ${res.concentration.toExponential(4)}`);
+@@ -606 +627 @@
+-        addLog('Error: ' + res.message, true);
++        addLog('❌ ' + t('status.label', 'Estado:') + ' ' + res.message, true);
+@@ -629 +650 @@
+-        document.getElementById('ref-cal-display').textContent = `Parámetros Ref. para ${wl}nm guardados ✓`;
++        document.getElementById('ref-cal-display').textContent = t('logs.params_saved', 'Parámetros Ref. para {wl}nm guardados ✓').replace('{wl}', wl);
+@@ -631 +652 @@
+-        addLog(`Parámetros de referencia guardados para ${wl}nm`);
++        addLog(t('logs.params_saved_log', 'Parámetros de referencia guardados para {wl}nm').replace('{wl}', wl));
+@@ -643,2 +664 @@
+-        addLog(`Sustracción de blanco: ${active ? 'Activada' : 'Desactivada'}`);
+-        // Refresh data
++        addLog(`${t('logs.blank_sub', 'Sustracción de blanco').replace('{status}', active ? t('status.on', 'Activada') : t('status.off', 'Desactivada'))}`);
+@@ -656 +676 @@
+-    if (!appState.isConnected) { alert('No conectado'); return; }
++    if (!appState.isConnected) { alert(t('alerts.not_connected', 'No conectado')); return; }
+@@ -663 +683 @@
+-        addLog(`Medición Y directa: ${res.value.toFixed(4)}`);
++        addLog(`${t('charts.measurement', 'Medición Y directa')}: ${res.value.toFixed(4)}`);
+@@ -675 +695 @@
+-    if (isNaN(x) || isNaN(y)) { alert('Valores X e Y deben ser numéricos'); return; }
++    if (isNaN(x) || isNaN(y)) { alert(t('alerts.invalid_input', 'Valores X e Y deben ser numéricos')); return; }
+@@ -684 +704 @@
+-    if (appState.selectedConcRow < 0) { alert('Seleccione un punto'); return; }
++    if (appState.selectedConcRow < 0) { alert(t('alerts.select_point', 'Seleccione un punto')); return; }
+@@ -700 +720 @@
+-    if (!confirm('¿Borrar TODOS los puntos de la curva?')) return;
++    if (!confirm(t('alerts.confirm_clear', '¿Borrar TODOS los puntos de la curva?'))) return;
+@@ -742 +761,0 @@
+-        // Add fit line if >= 2 points
+@@ -750 +769 @@
+-                label: `Ajuste: Y = ${fit.slope.toFixed(4)}X + ${fit.intercept.toFixed(4)} (R²=${fit.r2.toFixed(4)})`,
++                label: t('charts.fit', 'Ajuste') + `: Y = ${fit.slope.toFixed(4)}X + ${fit.intercept.toFixed(4)} (R²=${fit.r2.toFixed(4)})`,
+@@ -761 +780 @@
+-    chartConcCurve.options.plugins.title.text = `Curva: ${yType} @ ${wl}nm`;
++    chartConcCurve.options.plugins.title.text = t('charts.curve', 'Curva') + `: ${yType} @ ${wl}nm`;
+@@ -769 +788 @@
+-    if (!appState.isConnected) { alert('No conectado'); return; }
++    if (!appState.isConnected) { alert(t('alerts.not_connected', 'No conectado')); return; }
+@@ -775 +794 @@
+-        addLog(`A_custom medida: ${res.value.toFixed(4)}`);
++        addLog(`${t('charts.measurement', 'A_custom medida')}: ${res.value.toFixed(4)}`);
+@@ -788,2 +807,2 @@
+-    if (isNaN(conc)) { alert('Concentración inválida'); return; }
+-    if (document.getElementById('cal-abs-custom').disabled) { alert('Mida A_custom primero'); return; }
++    if (isNaN(conc)) { alert(t('alerts.invalid_conc', 'Concentración inválida')); return; }
++    if (document.getElementById('cal-abs-custom').disabled) { alert(t('alerts.measure_a_custom', 'Mida A_custom primero')); return; }
+@@ -802 +821 @@
+-    if (appState.selectedCalRow < 0) { alert('Seleccione un punto'); return; }
++    if (appState.selectedCalRow < 0) { alert(t('alerts.select_point', 'Seleccione un punto')); return; }
+@@ -819 +838 @@
+-    if (!confirm('¿Borrar TODOS los puntos de calibración?')) return;
++    if (!confirm(t('alerts.confirm_clear', '¿Borrar TODOS los puntos de calibración?'))) return;
+@@ -832 +851 @@
+-            alert('No se aplicó ninguna curva o modelo válido.');
++            alert(t('alerts.no_valid_model', 'No se aplicó ninguna curva o modelo válido.'));
+@@ -852 +871 @@
+-        tr.innerHTML = `<td>${p.conc.toFixed(6)}</td><td>${p.abs_custom.toFixed(4)}</td><td>${isNaN(p.abs_ref) ? 'N/A' : p.abs_ref.toFixed(4)}</td><td>${p.wl}</td>`;
++        tr.innerHTML = `<td>${p.conc.toFixed(6)}</td><td>${p.abs_custom.toFixed(4)}</td><td>${isNaN(p.abs_ref) ? t('charts.na', 'N/A') : p.abs_ref.toFixed(4)}</td><td>${p.wl}</td>`;
+@@ -870 +889 @@
+-                label: 'Puntos A_custom',
++                label: t('charts.points_custom', 'Puntos A_custom'),
+@@ -885 +904 @@
+-                    label: `A_custom = ${f.slope.toFixed(4)}*C + ${f.intercept.toFixed(4)}`,
++                    label: t('charts.equation', 'Ecuación') + `: A_custom = ${f.slope.toFixed(4)}*C + ${f.intercept.toFixed(4)}`,
+@@ -894,3 +913,3 @@
+-        chartCalCurve.options.scales.x.title.text = 'Concentración';
+-        chartCalCurve.options.scales.y.title.text = `A_custom @ ${wlText}`;
+-        chartCalCurve.options.plugins.title.text = `Calibración Sesión (A_custom vs C) @ ${wlText}`;
++        chartCalCurve.options.scales.x.title.text = t('charts.concentration', 'Concentración');
++        chartCalCurve.options.scales.y.title.text = t('charts.a_custom', 'A_custom @ {wl}').replace('{wl}', wlText);
++        chartCalCurve.options.plugins.title.text = t('charts.cal_session', 'Calibración Sesión (A_custom vs C) @ {wl}').replace('{wl}', wlText);
+@@ -898 +916,0 @@
+-        // Transfer model view
+@@ -902 +920 @@
+-                label: 'Puntos (A_ref vs A_custom)',
++                label: t('charts.points_ref', 'Puntos (A_ref vs A_custom)'),
+@@ -917 +935 @@
+-                    label: `A_ref = ${f.slope.toFixed(4)}*A_custom + ${f.intercept.toFixed(4)}`,
++                    label: t('charts.equation', 'Ecuación') + `: A_ref = ${f.slope.toFixed(4)}*A_custom + ${f.intercept.toFixed(4)}`,
+@@ -926,3 +944,3 @@
+-        chartCalCurve.options.scales.x.title.text = `A_custom @ ${wlText}`;
+-        chartCalCurve.options.scales.y.title.text = `A_ref @ ${wlText}`;
+-        chartCalCurve.options.plugins.title.text = `Modelo de Transferencia @ ${wlText}`;
++        chartCalCurve.options.scales.x.title.text = t('charts.a_custom', 'A_custom @ {wl}').replace('{wl}', wlText);
++        chartCalCurve.options.scales.y.title.text = t('charts.a_ref', 'A_ref @ {wl}').replace('{wl}', wlText);
++        chartCalCurve.options.plugins.title.text = t('charts.transfer_model', 'Modelo de Transferencia @ {wl}').replace('{wl}', wlText);
+@@ -939,2 +957,2 @@
+-        document.getElementById('cal-eq-label').textContent = `Ecuación: A_custom = ${f.slope.toFixed(4)}*C + ${f.intercept.toFixed(4)}`;
+-        document.getElementById('cal-r2-label').textContent = `R² (Sesión): ${f.r_squared.toFixed(4)}`;
++        document.getElementById('cal-eq-label').textContent = t('charts.equation', 'Ecuación') + `: A_custom = ${f.slope.toFixed(4)}*C + ${f.intercept.toFixed(4)}`;
++        document.getElementById('cal-r2-label').textContent = t('charts.r2_session', 'R² (Sesión)') + `: ${f.r_squared.toFixed(4)}`;
+@@ -942 +960 @@
+-        document.getElementById('cal-eq-label').textContent = 'Ecuación: N/A';
++        document.getElementById('cal-eq-label').textContent = t('charts.equation', 'Ecuación') + ': N/A';
+@@ -947,2 +965,2 @@
+-        document.getElementById('transfer-eq-label').textContent = `Ecuación: A_ref = ${f.slope.toFixed(4)}*A_custom + ${f.intercept.toFixed(4)}`;
+-        document.getElementById('transfer-r2-label').textContent = `R² (Transfer): ${f.r_squared.toFixed(4)}`;
++        document.getElementById('transfer-eq-label').textContent = t('charts.equation', 'Ecuación') + `: A_ref = ${f.slope.toFixed(4)}*A_custom + ${f.intercept.toFixed(4)}`;
++        document.getElementById('transfer-r2-label').textContent = t('charts.r2_transfer', 'R² (Transfer)') + `: ${f.r_squared.toFixed(4)}`;
+@@ -950,2 +968,2 @@
+-        document.getElementById('transfer-eq-label').textContent = 'Ecuación Transferencia: N/A';
+-        document.getElementById('transfer-r2-label').textContent = 'R² (Transfer): N/A';
++        document.getElementById('transfer-eq-label').textContent = t('charts.transfer_model', 'Ecuación Transferencia') + ': N/A';
++        document.getElementById('transfer-r2-label').textContent = t('charts.r2_transfer', 'R² (Transfer)') + ': N/A';
+@@ -972 +990 @@
+-                addLog('Datos cargados desde archivo');
++                addLog(t('logs.data_loaded', 'Datos cargados desde archivo'));
+@@ -986 +1004 @@
+-        addLog('Cámara térmica iniciada');
++        addLog(t('logs.thermal_started', 'Cámara térmica iniciada'));
+@@ -996 +1014 @@
+-    addLog('Cámara térmica detenida');
++    addLog(t('logs.thermal_stopped', 'Cámara térmica detenida'));
+@@ -1065 +1082,0 @@
+-    // Update the UI colorbar too
+@@ -1198 +1215 @@
+-            let line3 = `Punto #${meta.pointIndex}`;
++            let line3 = t('charts.point', 'Punto') + ` #${meta.pointIndex}`;
+@@ -1214 +1230,0 @@
+-    // Simplified colormaps
+@@ -1276 +1292 @@
+-            addLog('⚠️ Error guardando snapshot térmico: ' + res.message, true);
++            addLog('⚠️ ' + t('logs.thermal_save_err', 'Error guardando snapshot térmico: ') + res.message, true);
+@@ -1279 +1295 @@
+-        addLog('⚠️ Error en snapshot térmico: ' + e.message, true);
++        addLog('⚠️ ' + t('logs.thermal_err', 'Error en snapshot térmico: ') + e.message, true);
+@@ -1285 +1301 @@
+-        alert('No hay frame térmico para exportar');
++        alert(t('alerts.no_thermal_frame', 'No hay frame térmico para exportar'));
+@@ -1318 +1334 @@
+-    const meta = { timestamp: "Offline", pointIndex: parseInt(sel.value) + 1, concentration: "N/A", wavelength: "N/A" };
++    const meta = { timestamp: t('charts.offline', "Offline"), pointIndex: parseInt(sel.value) + 1, concentration: t('charts.na', "N/A"), wavelength: t('charts.na', "N/A") };
+@@ -1336 +1352 @@
+-        if (typeof _thermalHistFullChart === 'undefined' || !_thermalHistFullChart) { alert('Histograma no disponible'); return; }
++        if (typeof _thermalHistFullChart === 'undefined' || !_thermalHistFullChart) { alert(t('alerts.hist_na', 'Histograma no disponible')); return; }
+@@ -1345 +1361 @@
+-        if (!_offlineThermalHistChart) { alert('Histograma offline no disponible'); return; }
++        if (!_offlineThermalHistChart) { alert(t('alerts.hist_offline_na', 'Histograma offline no disponible')); return; }
+@@ -1354 +1370 @@
+-        tstd = 'N/A'; // CSV offline simple metadata
++        tstd = t('charts.na', 'N/A');
+@@ -1361 +1376,0 @@
+-    // Remove animation and force dark text on white bg for exporting
+@@ -1381 +1395,0 @@
+-    // Solid white bg
+@@ -1387 +1400,0 @@
+-    // Draw metadata panel
+@@ -1391 +1404 @@
+-    ctx.fillText('DATOS ESTADÍSTICOS', cx, 40);
++    ctx.fillText(t('charts.stats', 'DATOS ESTADÍSTICOS'), cx, 40);
+@@ -1397 +1410 @@
+-    ctx.fillText(`Píxel : ${npixels}`, cx, 180);
++    ctx.fillText(t('charts.pixel', 'Píxel') + ` : ${npixels}`, cx, 180);
+@@ -1399 +1412 @@
+-    ctx.fillText(`Fecha : ${tsStr}`, cx, 205);
++    ctx.fillText(t('charts.date', 'Fecha') + ` : ${tsStr}`, cx, 205);
+@@ -1408 +1420,0 @@
+-    // Revert visual settings
+@@ -1416 +1428 @@
+-    document.getElementById('thermal-meas-status').textContent = 'Estado: Midiendo...';
++    document.getElementById('thermal-meas-status').textContent = t('status.measuring', 'Estado: Midiendo...');
+@@ -1418 +1430 @@
+-    addLog('Medición térmica iniciada');
++    addLog(t('logs.thermal_meas_started', 'Medición térmica iniciada'));
+@@ -1423 +1435 @@
+-    document.getElementById('thermal-meas-status').textContent = `Estado: Detenido (${res.data_count || 0} puntos)`;
++    document.getElementById('thermal-meas-status').textContent = t('status.stopped', 'Estado: Detenido') + ` (${res.data_count || 0} ${t('charts.points', 'puntos')})`;
+@@ -1425 +1437 @@
+-    addLog('Medición térmica detenida');
++    addLog(t('logs.thermal_meas_stopped', 'Medición térmica detenida'));
+@@ -1479 +1491 @@
+-    document.getElementById('analysis-results').textContent = 'Sin resultados.';
++    document.getElementById('analysis-results').textContent = t('charts.no_analysis_results', 'Sin resultados.');
+@@ -1704 +1716 @@
+-    document.getElementById('theme-toggle-text').textContent = appState.isDarkTheme ? '☀️ Modo Claro' : '🌙 Modo Oscuro';
++    document.getElementById('theme-toggle-text').textContent = appState.isDarkTheme ? '☀️ ' + t('menu.light_mode', 'Modo Claro') : '🌙 ' + t('menu.dark_mode', 'Modo Oscuro');
+@@ -1791 +1802,0 @@
+-    const logOutput = document.getElementById('log-output');
+@@ -1793,4 +1804,4 @@
+-    if (logOutput.style.display === 'none') {
+-        logOutput.style.display = 'block';
+-        logArea.style.height = '200px';
+-        toggle.textContent = '▼';
++    logArea.classList.toggle('collapsed');
++    
++    if (logArea.classList.contains('collapsed')) {
++        toggle.textContent = '◀';
+@@ -1798,2 +1808,0 @@
+-        logOutput.style.display = 'none';
+-        logArea.style.height = '30px';
+@@ -1842,2 +1851 @@
+-            // Context keys start with lowercase, skip them from the tree
+-            if (key[0] === key[0].toLowerCase() && key !== key.toUpperCase()) return;
++            const topic = _cachedHelpTopics[key];
+@@ -1845 +1853 @@
+-            li.textContent = key;
++            li.textContent = topic.title || key;
+@@ -1849 +1857 @@
+-                document.getElementById('help-content').innerHTML = _cachedHelpTopics[key].content || '';
++                document.getElementById('help-content').innerHTML = topic.content || '';
+@@ -1861 +1869 @@
+-    const content = _cachedHelpTopics?.[topic]?.content || '<p>Ayuda no disponible para este contexto.</p>';
++    const content = _cachedHelpTopics && _cachedHelpTopics[topic] ? _cachedHelpTopics[topic].content : '<p>' + t('alerts.help_not_found', 'Ayuda no disponible para este contexto.') + '</p>';
+@@ -1883 +1891 @@
+-        addLog('Gráfico exportado como imagen.');
++        addLog(t('logs.graph_exported', 'Gráfico exportado como imagen.'));
+@@ -1885 +1893 @@
+-        alert('No hay gráfico para exportar.');
++        alert(t('alerts.no_graph', 'No hay gráfico para exportar.'));
+@@ -1896 +1904 @@
+-    addLog('Log exportado.');
++    addLog(t('logs.log_exported', 'Log exportado.'));
+@@ -1900 +1908 @@
+-    if (!confirm('¿Borrar todos los datos de la sesión?')) return;
++    if (!confirm(t('alerts.confirm_clear', 'Clear all session data?'))) return;
+@@ -1906,4 +1913,0 @@
+-    WAVELENGTHS.forEach(wl => {
+-        document.getElementById(`cal-val-${wl}`).textContent = 'N/A';
+-        document.getElementById(`meas-val-${wl}`).textContent = 'N/A';
+-    });
+@@ -1912 +1916 @@
+-    addLog('Datos de sesión borrados.');
++    addLog(t('logs.session_cleared', 'Session data cleared.'));
+@@ -2376 +2380 @@
+-        addLog('⚠️ Plugin zoom no disponible (comprueba CDN hammerjs + chartjs-plugin-zoom)', true);
++        addLog('⚠️ ' + t('logs.zoom_plugin_err', 'Plugin zoom no disponible'), true);
+@@ -2385 +2389 @@
+-    addLog(isActive ? 'Zoom desactivado' : '🔍 Zoom activado — rueda para zoom, arrastre para pan');
++    addLog(isActive ? t('logs.zoom_off', 'Zoom desactivado') : '🔍 ' + t('logs.zoom_on', 'Zoom activado'));
+@@ -2390 +2394 @@
+-    if (chart && chart.resetZoom) { chart.resetZoom(); addLog('Zoom restablecido'); }
++    if (chart && chart.resetZoom) { chart.resetZoom(); addLog(t('logs.zoom_reset', 'Zoom restablecido')); }
+@@ -2566 +2570 @@
+-        document.getElementById('recovery-factors-container').textContent = 'Sin puntos de cal.';
++        document.getElementById('recovery-factors-container').textContent = t('charts.no_cal_points', 'Sin puntos de cal.');
+@@ -2665 +2669 @@
+-        addLog('QC: No hay datos de calibración suficientes');
++        addLog('QC: ' + t('logs.insufficient_cal_data', 'No hay datos de calibración suficientes'));
+@@ -2691 +2695,2 @@
+-    addLog(`QC Evaluado: R²=${fmtNum(r2, 4)} | %CV(resid)=${isNaN(cvResid) ? 'N/A' : cvResid.toFixed(1)}% | n=${n} → ${overallPassed ? '✅ APROBADO' : '⚠️ REVISAR'}`);
++    const qcLabel = overallPassed ? '✅ ' + t('status.passed', 'APROBADO') : '⚠️ ' + t('status.review', 'REVISAR');
++    addLog(`QC Evaluado: R²=${fmtNum(r2, 4)} | %CV(resid)=${isNaN(cvResid) ? 'N/A' : cvResid.toFixed(1)}% | n=${n} → ${qcLabel}`);
+@@ -2806,2 +2811,2 @@
+-        { val: mean - std, label: `-1σ: ${(mean - std).toFixed(1)}`, color: 'rgba(124,108,240,0.6)', dash: [3, 3] },
+-        { val: mean + std, label: `+1σ: ${(mean + std).toFixed(1)}`, color: 'rgba(124,108,240,0.6)', dash: [3, 3] },
++        { val: mean - std, label: `-1\u03c3: ${(mean - std).toFixed(1)}`, color: 'rgba(124,108,240,0.6)', dash: [3, 3] },
++        { val: mean + std, label: `+1\u03c3: ${(mean + std).toFixed(1)}`, color: 'rgba(124,108,240,0.6)', dash: [3, 3] },
+@@ -2827 +2832 @@
+-        label: 'Píxeles',
++        label: t('charts.pixel', 'Píxeles'),
+@@ -2852 +2857 @@
+-                        text: 'Distribución de Temperaturas — Frame Actual',
++                        text: t('charts.thermal_dist', 'Distribución de Temperaturas \u2014 Frame Actual'),
+@@ -2864 +2869 @@
+-                            label: (ctx) => ctx.dataset.type === 'bar' ? `${ctx.parsed.y} píxeles @ ${ctx.parsed.x.toFixed(1)}°C` : ctx.dataset.label,
++                            label: (ctx) => ctx.dataset.type === 'bar' ? `${ctx.parsed.y} ${t('charts.pixel', 'píxeles').toLowerCase()} @ ${ctx.parsed.x.toFixed(1)}°C` : ctx.dataset.label,
+@@ -2871 +2876 @@
+-                        title: { display: true, text: 'Temperatura (°C)', color: tc, font: { family: 'Inter', size: 11 } },
++                        title: { display: true, text: t('charts.temperature', 'Temperatura') + ' (°C)', color: tc, font: { family: 'Inter', size: 11 } },
+@@ -2878 +2883 @@
+-                        title: { display: true, text: 'Número de píxeles', color: tc, font: { family: 'Inter', size: 11 } },
++                        title: { display: true, text: t('charts.pixel_count', 'Número de píxeles'), color: tc, font: { family: 'Inter', size: 11 } },
+@@ -2986 +2991 @@
+-            classLabel = `▲ Por encima de +1σ`;
++            classLabel = `\u25b2 ` + t('charts.above_sigma', 'Por encima de +1\u03c3');
+@@ -2989 +2994 @@
+-            classLabel = `▼ Por debajo de -1σ`;
++            classLabel = `\u25bc ` + t('charts.below_sigma', 'Por debajo de -1\u03c3');
+@@ -2992 +2997 @@
+-            classLabel = `● Dentro de ±1σ`;
++            classLabel = `\u25cf ` + t('charts.within_sigma', 'Dentro de \u00b11\u03c3');
+@@ -2997,2 +3002,2 @@
+-        document.getElementById('tt-pos').textContent = `Fila: ${row} (0–${rows - 1}) Col: ${col} (0–${cols - 1})`;
+-        document.getElementById('tt-delta').textContent = `ΔT = ${deltaT >= 0 ? '+' : ''}${deltaT.toFixed(2)} °C`;
++        document.getElementById('tt-pos').textContent = t('charts.row', 'Fila') + `: ${row} (0\u2013${rows - 1}) ` + t('charts.col', 'Col') + `: ${col} (0\u2013${cols - 1})`;
++        document.getElementById('tt-delta').textContent = `\u0394T = ${deltaT >= 0 ? '+' : ''}${deltaT.toFixed(2)} \u00b0C`;
+@@ -3168,0 +3174,184 @@
++/* ─── MEASUREMENT HISTORY & DASHBOARD LOGIC ─── */
++
++function addMeasurementToHistory(type, values, thermalData = null, extraDetails = "") {
++    const entry = {
++        id: Date.now() + Math.random().toString(36).substr(2, 9),
++        type: type, // 'single', 'sequential', 'continuous', 'calibration'
++        timestamp: new Date().toLocaleString(),
++        values: [...values],
++        thermal: thermalData ? { ...thermalData } : null,
++        details: extraDetails,
++        selected: false
++    };
++    
++    // Capturing thumbnail if thermal is present
++    const tCanvas = document.getElementById('thermal-canvas');
++    if (thermalData && tCanvas) {
++        entry.thermalSnapshot = tCanvas.toDataURL('image/jpeg', 0.5);
++    }
++
++    appState.measurementHistory.push(entry);
++    updateHistoryTable();
++}
++
++function updateHistoryTable() {
++    const tbody = document.getElementById('history-tbody');
++    const emptyMsg = document.getElementById('history-empty-msg');
++    const badge = document.getElementById('history-count');
++    
++    if (!tbody) return;
++    
++    tbody.innerHTML = '';
++    if (badge) badge.textContent = appState.measurementHistory.length;
++    
++    if (appState.measurementHistory.length === 0) {
++        if (emptyMsg) emptyMsg.classList.remove('hidden');
++        return;
++    } else {
++        if (emptyMsg) emptyMsg.classList.add('hidden');
++    }
++
++    // Locale mapping for types
++    const typeLocales = {
++        'single': t('history.single', 'Única'),
++        'sequential': t('history.sequential', 'Secuencial'),
++        'continuous': t('history.continuous', 'Continua'),
++        'calibration': t('history.calibration', 'Calibración')
++    };
++
++    // Show most recent first
++    [...appState.measurementHistory].reverse().forEach((item) => {
++        const actualIdx = appState.measurementHistory.findIndex(h => h.id === item.id);
++        const tr = document.createElement('tr');
++        tr.className = 'history-row' + (item.selected ? ' selected' : '');
++        tr.style.cursor = 'pointer';
++        
++        let typeClass = 'badge-single';
++        if (item.type === 'sequential') typeClass = 'badge-sequential';
++        if (item.type === 'continuous') typeClass = 'badge-continuous';
++        if (item.type === 'calibration') typeClass = 'badge-cal';
++        
++        const typeStr = typeLocales[item.type] || item.type;
++        
++        // Formatear Timestamp (Solo Hora si es hoy, Fecha+Hora si es de otro día)
++        const dateObj = new Date(item.timestamp);
++        const isToday = (dateObj.toDateString() === new Date().toDateString());
++        const timeStr = isToday ? dateObj.toLocaleTimeString() : item.timestamp;
++
++        // Individual columns for each value with 2 decimal precision
++        const valCols = item.values.map(v => `<td>${v.toFixed(2)}</td>`).join('');
++
++        let thermalHtml = '<span class="text-muted">---</span>';
++        if (item.thermal) {
++            thermalHtml = `
++                <div style="display:flex; align-items:center; justify-content:center; gap:6px;">
++                    ${item.thermalSnapshot ? `<img src="${item.thermalSnapshot}" style="width:32px; height:24px; border-radius:3px; border:1px solid #7c6cf0; cursor:zoom-in;" onclick="event.stopPropagation(); viewHistoryThermal('${item.id}')" title="Ver foto térmica">` : ''}
++                    <span style="font-weight:600; color:var(--accent-info);">${item.thermal.mean.toFixed(1)}°C</span>
++                </div>
++            `;
++        }
++
++        tr.innerHTML = `
++            <td onclick="event.stopPropagation();"><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="toggleHistorySelection(${actualIdx}, this.checked)"></td>
++            <td onclick="toggleHistorySelection(${actualIdx}, !${item.selected})">
++                <span class="type-badge ${typeClass}">${typeStr}</span>
++                ${item.details ? `<div style="font-size: 9px; opacity: 0.8; margin-top: 2px;">${item.details}</div>` : ''}
++            </td>
++            <td onclick="toggleHistorySelection(${actualIdx}, !${item.selected})" class="text-muted" style="font-size:10px; font-weight:600; letter-spacing:0.5px;">${timeStr}</td>
++            ${valCols}
++            <td onclick="toggleHistorySelection(${actualIdx}, !${item.selected})">${thermalHtml}</td>
++            <td class="text-center" onclick="event.stopPropagation();">
++                <button class="btn btn-sm btn-icon" onclick="deleteHistoryItem(${actualIdx})" title="Eliminar medición" style="padding:4px 6px; background:rgba(255,0,0,0.1); border-color:transparent;">🗑️</button>
++            </td>
++        `;
++        tbody.appendChild(tr);
++    });
++}
++
++function toggleHistorySelection(idx, checked) {
++    appState.measurementHistory[idx].selected = checked;
++    updateHistoryTable();
++}
++
++function toggleAllHistoryCheckboxes(source) {
++    appState.measurementHistory.forEach(item => item.selected = source.checked);
++    updateHistoryTable();
++}
++
++function selectAllHistory() {
++    appState.measurementHistory.forEach(item => item.selected = true);
++    updateHistoryTable();
++}
++
++function deleteHistoryItem(idx) {
++    appState.measurementHistory.splice(idx, 1);
++    updateHistoryTable();
++}
++
++function toggleMaximizeDashboards() {
++    const dash = document.getElementById('bottom-dashboard');
++    const btn = document.getElementById('btn-maximize-dash');
++    dash.classList.toggle('maximized');
++    
++    if (dash.classList.contains('maximized')) {
++        btn.innerHTML = '🗗';
++        btn.title = t('history.minimize', 'Restaurar');
++    } else {
++        btn.innerHTML = '🗖';
++        btn.title = t('history.maximize', 'Maximizar');
++    }
++}
++
++async function exportSelectedHistory() {
++    const selected = appState.measurementHistory.filter(h => h.selected);
++    if (selected.length === 0) {
++        alert(t('alerts.no_selection', 'Por favor, seleccione al menos una medición para exportar.'));
++        return;
++    }
++
++    let csv = 'ID,Timestamp,Type,' + WAVELENGTHS.join(',') + ',ThermalMean,ThermalMin,ThermalMax,ThermalStd\n';
++    selected.forEach(item => {
++        let row = `${item.id},${item.timestamp},${item.type},` + item.values.join(',');
++        if (item.thermal) {
++            row += `,${item.thermal.mean},${item.thermal.min},${item.thermal.max},${item.thermal.std}`;
++        } else {
++            row += ',,,,';
++        }
++        csv += row + '\n';
++    });
++
++    const blob = new Blob([csv], { type: 'text/csv' });
++    const url = window.URL.createObjectURL(blob);
++    const a = document.createElement('a');
++    a.setAttribute('hidden', '');
++    a.setAttribute('href', url);
++    a.setAttribute('download', `SpectroHistory_${new Date().getTime()}.csv`);
++    document.body.appendChild(a);
++    a.click();
++    document.body.removeChild(a);
++    
++    addLog(`✅ Exportadas ${selected.length} mediciones seleccionadas.`);
++}
++
++function viewHistoryThermal(id) {
++    const item = appState.measurementHistory.find(h => h.id === id);
++    if (!item || !item.thermalSnapshot) return;
++    
++    const win = window.open("", "_blank", "width=800,height=600");
++    win.document.write(`
++        <html><head><title>Thermal Image - ${item.timestamp}</title></head>
++        <body style="background:#1e1e2e; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:#fff; font-family:sans-serif; margin:0;">
++            <h2 style="margin-bottom:20px;">Capture ID: ${item.id}</h2>
++            <div style="background:#000; padding:10px; border-radius:12px; border:2px solid #7c6cf0;">
++                <img src="${item.thermalSnapshot}" style="width:640px; height:480px; image-rendering:pixelated; border-radius:4px;">
++            </div>
++            <div style="margin-top:20px; text-align:center;">
++                <p>Captured on: ${item.timestamp}</p>
++                <p style="color:#a0a0b8;">Stats: Mean ${item.thermal.mean.toFixed(2)}°C | Max ${item.thermal.max.toFixed(2)}°C</p>
++                <button onclick="window.close()" style="margin-top:20px; padding:10px 30px; background:#7c6cf0; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Close</button>
++            </div>
++        </body></html>
++    `);
++}
++
++

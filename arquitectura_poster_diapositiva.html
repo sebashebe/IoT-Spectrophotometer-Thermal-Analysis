@@ -1,0 +1,363 @@
+<!--
+  Copyright (c) 2026 Sebastian Herrera Betancur
+  Biomicrosystems Research Group | Universidad de los Andes
+  PROPRIETARY CODE - Unauthorized use, copying or distribution is strictly prohibited.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced System Architecture - Spectrophotometer IoT</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg: #030712;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --border: rgba(255, 255, 255, 0.1);
+            --accent-primary: #6366f1; /* Indigo */
+            --accent-secondary: #06b6d4; /* Cyan */
+            --accent-tertiary: #ec4899; /* Pink */
+            --accent-quaternary: #10b981; /* Emerald */
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(236, 72, 153, 0.15) 0%, transparent 50%);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        header h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin: 0;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -2px;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            margin-top: 10px;
+            font-weight: 300;
+        }
+
+        .architecture-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+        }
+
+        .layer {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .layer:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-5px);
+        }
+
+        .layer-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .layer-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .layer-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .layer-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .content-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .section h4 {
+            margin: 0 0 12px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .tag-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #cbd5e1;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .feature-list li {
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+            color: #e2e8f0;
+        }
+
+        .feature-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent-primary);
+        }
+
+        /* Layer Specific Accents */
+        .layer-frontend { border-top: 4px solid var(--accent-primary); }
+        .layer-frontend .layer-icon { color: var(--accent-primary); }
+        
+        .layer-backend { border-top: 4px solid var(--accent-secondary); }
+        .layer-backend .layer-icon { color: var(--accent-secondary); }
+
+        .layer-science { border-top: 4px solid var(--accent-tertiary); }
+        .layer-science .layer-icon { color: var(--accent-tertiary); }
+
+        .layer-hardware { border-top: 4px solid var(--accent-quaternary); }
+        .layer-hardware .layer-icon { color: var(--accent-quaternary); }
+
+        .math-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .highlight { color: var(--accent-secondary); }
+
+        footer {
+            margin-top: 50px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .flow-line {
+            grid-column: 1 / -1;
+            height: 2px;
+            background: linear-gradient(to right, transparent, var(--border), transparent);
+            margin: 10px 0;
+        }
+
+        @media (max-width: 1000px) {
+            .architecture-grid { grid-template-columns: 1fr; }
+            .content-sections { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>System Architecture Deep-Dive</h1>
+            <p>IoT Spectrophotometry Ecosystem | Professional Research Grade Configuration</p>
+        </header>
+
+        <div class="architecture-grid">
+            
+            <!-- LAYER 1: REACTIVE FRONTEND -->
+            <div class="layer layer-frontend">
+                <span class="layer-subtitle">Layer 01</span>
+                <div class="layer-header">
+                    <div class="layer-icon">⚛️</div>
+                    <div class="layer-title">Reactive Frontend SPA</div>
+                </div>
+                <div class="content-sections">
+                    <div class="section">
+                        <h4>Technologies</h4>
+                        <div class="tag-cloud">
+                            <span class="tag">Vanilla JS ES6+</span>
+                            <span class="tag">Chart.js 4.0</span>
+                            <span class="tag">CSS Grid/Flex</span>
+                            <span class="tag">Fetch API</span>
+                            <span class="tag">SessionStorage</span>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <h4>Critical Modules</h4>
+                        <ul class="feature-list">
+                            <li><b>State Engine:</b> Centralized reactive appState object.</li>
+                            <li><b>Real-time Polling:</b> Debounced hardware status synchronization.</li>
+                            <li><b>Viz Core:</b> Multi-dataset spectral superimposition.</li>
+                            <li><b>UI Polish:</b> Dynamic dark/light theme switching via CSS variables.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LAYER 2: BACKEND API & CONTROL -->
+            <div class="layer layer-backend">
+                <span class="layer-subtitle">Layer 02</span>
+                <div class="layer-header">
+                    <div class="layer-icon">⚙️</div>
+                    <div class="layer-title">Backend API & State Control</div>
+                </div>
+                <div class="content-sections">
+                    <div class="section">
+                        <h4>Core Stack</h4>
+                        <div class="tag-cloud">
+                            <span class="tag">Django 4.2+</span>
+                            <span class="tag">Python 3.11</span>
+                            <span class="tag">Multi-Threading</span>
+                            <span class="tag">REST API</span>
+                            <span class="tag">SQLite3</span>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <h4>Runtime Logic</h4>
+                        <ul class="feature-list">
+                            <li><b>Thread Safety:</b> Global <code>_state_lock</code> for atomic hardware access.</li>
+                            <li><b>Session I18n:</b> Dynamic localization based on Django middleware.</li>
+                            <li><b>Data Persistence:</b> Robust CSV serialization with full metadata.</li>
+                            <li><b>Error Logging:</b> Persistent circular buffer for system diagnostics.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-line"></div>
+
+            <!-- LAYER 3: SCIENTIFIC COMPUTING -->
+            <div class="layer layer-science">
+                <span class="layer-subtitle">Layer 03</span>
+                <div class="layer-header">
+                    <div class="layer-icon">🧪</div>
+                    <div class="layer-title">Scientific Computing Engine</div>
+                </div>
+                <div class="content-sections">
+                    <div class="section">
+                        <h4>Mathematical Core</h4>
+                        <div class="math-box">
+                            <span class="highlight">// Beer-Lambert Law</span><br>
+                            A = -log10(I / I₀)<br>
+                            C = (A - intercept) / slope<br><br>
+                            <span class="highlight">// Linear Regression</span><br>
+                            Ordinary Least Squares (OLS)<br>
+                            R² Coefficient Verification
+                        </div>
+                    </div>
+                    <div class="section">
+                        <h4>Data Processing</h4>
+                        <ul class="feature-list">
+                            <li><b>Blank Subtraction:</b> Real-time $I - I_0$ baseline correction.</li>
+                            <li><b>Signal Averaging:</b> M-samples integration for SNR improvement.</li>
+                            <li><b>Thermal Fusion:</b> Syncing spectral points with MLX90640 Mean T.</li>
+                            <li><b>Transfer Models:</b> Slope/Intercept instrument cross-calibration.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LAYER 4: HARDWARE HAL -->
+            <div class="layer layer-hardware">
+                <span class="layer-subtitle">Layer 04</span>
+                <div class="layer-header">
+                    <div class="layer-icon">🔌</div>
+                    <div class="layer-title">Hardware Abstraction (HAL)</div>
+                </div>
+                <div class="content-sections">
+                    <div class="section">
+                        <h4>Communication Protocols</h4>
+                        <div class="tag-cloud">
+                            <span class="tag">I2C (Multi-Bus)</span>
+                            <span class="tag">SMBus2</span>
+                            <span class="tag">RPi.GPIO (BCM)</span>
+                            <span class="tag">Adafruit CircuitPython</span>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <h4>Peripheral Drivers</h4>
+                        <ul class="feature-list">
+                            <li><b>AS726X:</b> 6-Channel Virtual Register Access (Bus 22).</li>
+                            <li><b>MLX90640:</b> 2Hz Async Thermal Frame Buffer (Bus 1).</li>
+                            <li><b>GPIO 17:</b> High-Precision LED Pulse Control.</li>
+                            <li><b>Emulation:</b> Comprehensive Mock classes for CI/CD testing.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <footer>
+            <p>© 2026 Spectrophotometer Project | Professional Architectural Blueprint | Deep-Dive Version</p>
+        </footer>
+    </div>
+
+</body>
+</html>
